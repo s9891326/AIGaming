@@ -2,6 +2,7 @@
 package httpserver
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,12 +19,15 @@ type HealthResponse struct {
 }
 
 // NewRouter 建立所有 HTTP 路由。
-// 所有路由都掛在 /api 底下，前端開發時由 Vite 代理過來，因此不需要 CORS 設定。
-func NewRouter(cfg config.Config) *gin.Engine {
+// 所有路由都掛在 /api 底下，前端由 Vite（開發）或 nginx（docker）代理過來，同源所以不需要 CORS。
+func NewRouter(cfg config.Config, log *slog.Logger) *gin.Engine {
 	gin.SetMode(cfg.GinMode)
+	redirectGinDebugOutput(log)
 
 	r := gin.New()
-	r.Use(gin.Logger(), gin.Recovery())
+	// 不信任任何代理標頭，ClientIP() 直接使用連線來源位址。
+	_ = r.SetTrustedProxies(nil)
+	r.Use(RequestLogger(log, "/api/healthz"), Recovery(log))
 
 	api := r.Group("/api")
 	api.GET("/healthz", func(c *gin.Context) {
