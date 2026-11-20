@@ -31,6 +31,46 @@ AIGaming/
 └── web/      # React 前端
 ```
 
+## 快速開始
+
+需求：Go 1.25+、Node.js 22+
+
+開兩個終端機，分別啟動後端與前端：
+
+```powershell
+# 終端機 1：後端（http://localhost:8080）
+cd server
+go run ./cmd/server
+```
+
+```powershell
+# 終端機 2：前端（http://localhost:5173）
+cd web
+npm install
+npm run dev
+```
+
+打開 http://localhost:5173 ，看到「伺服器狀態 ● ok」就代表前後端串接成功。
+
+開發時 Vite 會把 `/api`、`/ws` 代理到後端，因此瀏覽器只會看到同一個來源，後端不需要設定 CORS。
+
+### 常用指令
+
+| 位置 | 指令 | 說明 |
+|---|---|---|
+| `server/` | `go test ./...` | 執行後端測試 |
+| `server/` | `go vet ./...` | 靜態檢查 |
+| `web/` | `npm run build` | 型別檢查 + 打包 |
+| `web/` | `npm run lint` | oxlint 檢查 |
+
+### 環境變數（後端）
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `PORT` | `8080` | 監聽 port |
+| `GIN_MODE` | `debug` | `debug` / `release` |
+| `APP_VERSION` | `dev` | 顯示於 `/api/healthz` |
+
 ## 開發路線圖
 
 每個功能一個 PR，逐步迭代：
