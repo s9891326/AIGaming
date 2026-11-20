@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/game.proto.
  */
 export const file_game_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCK6AQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SABCCQoHcGF5bG9hZCI4CgdXZWxjb21lEhUKDWNvbm5lY3Rpb25faWQYASABKAkSFgoOc2VydmVyX3ZlcnNpb24YAiABKAkiHgoEUGluZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoASI2CgRQb25nEhYKDmNsaWVudF90aW1lX21zGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgBIg0KC0pvaW5SZXF1ZXN0InYKDEpvaW5BY2NlcHRlZBIRCglwbGF5ZXJfaWQYASABKA0SEwoLd29ybGRfd2lkdGgYAiABKAISFAoMd29ybGRfaGVpZ2h0GAMgASgCEhEKCXRpY2tfcmF0ZRgEIAEoDRIVCg1wbGF5ZXJfcmFkaXVzGAUgASgCIjoKC1BsYXllcklucHV0EgsKA3NlcRgBIAEoDRIOCgZtb3ZlX3gYAiABKAISDgoGbW92ZV95GAMgASgCIlwKDVdvcmxkU25hcHNob3QSDAoEdGljaxgBIAEoDRIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoARIlCgdwbGF5ZXJzGAMgAygLMhQuZ2FtZS52MS5QbGF5ZXJTdGF0ZSJHCgtQbGF5ZXJTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISFgoObGFzdF9pbnB1dF9zZXEYBCABKA1CLFoqYWlnYW1pbmcvc2VydmVyL2ludGVybmFsL3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM");
+  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCK6AQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SABCCQoHcGF5bG9hZCI4CgdXZWxjb21lEhUKDWNvbm5lY3Rpb25faWQYASABKAkSFgoOc2VydmVyX3ZlcnNpb24YAiABKAkiHgoEUGluZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoASI2CgRQb25nEhYKDmNsaWVudF90aW1lX21zGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgBIg0KC0pvaW5SZXF1ZXN0IowBCgxKb2luQWNjZXB0ZWQSEQoJcGxheWVyX2lkGAEgASgNEhMKC3dvcmxkX3dpZHRoGAIgASgCEhQKDHdvcmxkX2hlaWdodBgDIAEoAhIRCgl0aWNrX3JhdGUYBCABKA0SFQoNcGxheWVyX3JhZGl1cxgFIAEoAhIUCgxwbGF5ZXJfc3BlZWQYBiABKAIiOgoLUGxheWVySW5wdXQSCwoDc2VxGAEgASgNEg4KBm1vdmVfeBgCIAEoAhIOCgZtb3ZlX3kYAyABKAIiXAoNV29ybGRTbmFwc2hvdBIMCgR0aWNrGAEgASgNEhYKDnNlcnZlcl90aW1lX21zGAIgASgBEiUKB3BsYXllcnMYAyADKAsyFC5nYW1lLnYxLlBsYXllclN0YXRlIkcKC1BsYXllclN0YXRlEgoKAmlkGAEgASgNEgkKAXgYAiABKAISCQoBeRgDIAEoAhIWCg5sYXN0X2lucHV0X3NlcRgEIAEoDUIsWiphaWdhbWluZy9zZXJ2ZXIvaW50ZXJuYWwvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw");
 
 /**
  * ClientMessage 是客戶端送給伺服器的信封。
@@ -223,11 +223,18 @@ export type JoinAccepted = Message<"game.v1.JoinAccepted"> & {
   tickRate: number;
 
   /**
-   * 角色半徑（遊戲單位），用於繪製。
+   * 角色半徑（遊戲單位），用於繪製與客戶端預測的邊界計算。
    *
    * @generated from field: float player_radius = 5;
    */
   playerRadius: number;
+
+  /**
+   * 角色移動速度（單位 / 秒），客戶端預測用，必須與伺服器算法一致。
+   *
+   * @generated from field: float player_speed = 6;
+   */
+  playerSpeed: number;
 };
 
 /**
@@ -238,14 +245,16 @@ export const JoinAcceptedSchema: GenMessage<JoinAccepted> = /*@__PURE__*/
   messageDesc(file_game_v1_game, 6);
 
 /**
- * PlayerInput 是玩家目前想移動的方向，只在方向改變時送出。
- * 伺服器會持續套用最後一次收到的輸入，直到下一次改變。
+ * PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
+ * 移動時客戶端每個 tick 送一筆，不動時不送。伺服器收到就套用，
+ * 並在快照中回報 last_input_seq；客戶端從伺服器位置重播尚未確認的輸入（預測 / 校正）。
+ * 伺服器以時間預算限制每秒可套用的輸入數，超出的會被丟棄（防止加速作弊）。
  *
  * @generated from message game.v1.PlayerInput
  */
 export type PlayerInput = Message<"game.v1.PlayerInput"> & {
   /**
-   * 遞增的輸入序號，之後的客戶端預測 / 校正會用到。
+   * 遞增的輸入序號（從 1 開始）。
    *
    * @generated from field: uint32 seq = 1;
    */
