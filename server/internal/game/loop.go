@@ -1,0 +1,168 @@
+package game
+
+import (
+	"context"
+	"log/slog"
+	"time"
+
+	gamev1 "aigaming/server/internal/pb/game/v1"
+)
+
+// Sink 是收快照的對象（實際上是一條 WebSocket 連線）。Send 必須不阻塞。
+type Sink interface {
+	Send(msg *gamev1.ServerMessage) error
+}
+
+// LoopConfig 是遊戲迴圈的參數。
+type LoopConfig struct {
+	TickRate int // 每秒 tick 數
+	World    WorldConfig
+}
+
+// DefaultLoopConfig 是預設參數：20Hz。
+var DefaultLoopConfig = LoopConfig{TickRate: 20, World: DefaultWorldConfig}
+
+type member struct {
+	id   PlayerID
+	sink Sink
+}
+
+// command 是要在 Loop goroutine 上執行的操作。
+// 其他 goroutine 不直接碰 World，而是把「要做的事」包成閉包丟進 channel，
+// 這樣 World 永遠只有一個擁有者，完全不需要鎖。
+type command func(l *Loop)
+
+// Loop 以固定 tick 推進 World，並把每個 tick 的快照廣播給所有成員。
+//
+// 對外的 Join / Leave / Input 可以從任何 goroutine 呼叫（通常是各連線的讀取 goroutine），
+// 它們只是把指令送進 channel；真正的狀態變更都在 Run 的 goroutine 中發生。
+type Loop struct {
+	log     *slog.Logger
+	cfg     LoopConfig
+	world   *World
+	members map[string]*member // key：連線 ID
+	cmds    chan command
+	done    chan struct{}
+	now     func() time.Time
+}
+
+// NewLoop 建立遊戲迴圈，需要呼叫 Run 才會開始。
+func NewLoop(log *slog.Logger, cfg LoopConfig) *Loop {
+	return &Loop{
+		log:     log,
+		cfg:     cfg,
+		world:   NewWorld(cfg.World),
+		members: make(map[string]*member),
+		cmds:    make(chan command, 256),
+		done:    make(chan struct{}),
+		now:     time.Now,
+	}
+}
+
+// Run 執行遊戲迴圈直到 ctx 結束。
+func (l *Loop) Run(ctx context.Context) {
+	defer close(l.done)
+
+	interval := time.Second / time.Duration(l.cfg.TickRate)
+	dt := interval.Seconds()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	l.log.Info("game loop started", "tick_rate", l.cfg.TickRate,
+		"world", l.cfg.World.Width, "x", l.cfg.World.Height)
+
+	for {
+		select {
+		case <-ctx.Done():
+			l.log.Info("game loop stopped", "tick", l.world.Tick())
+			return
+		case cmd := <-l.cmds:
+			// 指令一到就處理（例如 Join 能立刻收到 JoinAccepted），不用等下一個 tick。
+			cmd(l)
+		case <-ticker.C:
+			start := l.now()
+			l.world.Step(dt)
+			l.broadcast()
+			if took := l.now().Sub(start); took > interval/2 {
+				l.log.Warn("slow tick", "tick", l.world.Tick(), "took", took, "budget", interval)
+			}
+		}
+	}
+}
+
+// Join 讓 key（連線 ID）加入遊戲。同一個 key 重複加入會被忽略。
+// sink 會先收到 JoinAccepted，之後每個 tick 收到 WorldSnapshot。
+func (l *Loop) Join(key string, sink Sink) {
+	l.enqueue(func(l *Loop) {
+		if _, ok := l.members[key]; ok {
+			return
+		}
+		id := l.world.AddPlayer()
+		l.members[key] = &member{id: id, sink: sink}
+		_ = sink.Send(&gamev1.ServerMessage{Payload: &gamev1.ServerMessage_JoinAccepted{
+			JoinAccepted: &gamev1.JoinAccepted{
+				PlayerId:     uint32(id),
+				WorldWidth:   float32(l.cfg.World.Width),
+				WorldHeight:  float32(l.cfg.World.Height),
+				TickRate:     uint32(l.cfg.TickRate),
+				PlayerRadius: float32(l.cfg.World.PlayerRadius),
+			},
+		}})
+		l.log.Info("player joined", "conn", key, "player", id, "players", len(l.members))
+	})
+}
+
+// Leave 移除 key 的角色；沒加入過時什麼都不做。
+func (l *Loop) Leave(key string) {
+	l.enqueue(func(l *Loop) {
+		m, ok := l.members[key]
+		if !ok {
+			return
+		}
+		delete(l.members, key)
+		l.world.RemovePlayer(m.id)
+		l.log.Info("player left", "conn", key, "player", m.id, "players", len(l.members))
+	})
+}
+
+// Input 更新 key 的角色移動方向。
+func (l *Loop) Input(key string, seq uint32, x, y float64) {
+	l.enqueue(func(l *Loop) {
+		if m, ok := l.members[key]; ok {
+			l.world.SetInput(m.id, seq, x, y)
+		}
+	})
+}
+
+// enqueue 把指令送進 Loop；Loop 已停止時直接丟棄，避免呼叫端永遠卡住。
+func (l *Loop) enqueue(cmd command) {
+	select {
+	case l.cmds <- cmd:
+	case <-l.done:
+	}
+}
+
+func (l *Loop) broadcast() {
+	if len(l.members) == 0 {
+		return
+	}
+	players := l.world.Players()
+	states := make([]*gamev1.PlayerState, len(players))
+	for i, p := range players {
+		states[i] = &gamev1.PlayerState{
+			Id:           uint32(p.ID),
+			X:            float32(p.Pos.X),
+			Y:            float32(p.Pos.Y),
+			LastInputSeq: p.LastInputSeq,
+		}
+	}
+	msg := &gamev1.ServerMessage{Payload: &gamev1.ServerMessage_Snapshot{Snapshot: &gamev1.WorldSnapshot{
+		Tick:         l.world.Tick(),
+		ServerTimeMs: float64(l.now().UnixMilli()),
+		Players:      states,
+	}}}
+	for _, m := range l.members {
+		// Send 不會阻塞；失敗代表連線正在關閉，稍後會收到 Leave。
+		_ = m.sink.Send(msg)
+	}
+}

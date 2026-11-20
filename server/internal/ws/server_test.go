@@ -48,7 +48,7 @@ func newEnv(t *testing.T) *testEnv {
 	t.Helper()
 	logs := &syncBuffer{}
 	log := logger.New(logger.Options{Writer: logs, Level: slog.LevelDebug, Color: logger.ColorNever})
-	srv := ws.NewServer(log, session.NewHandler(log, "test"))
+	srv := ws.NewServer(log, session.NewHandler(log, "test", nil))
 	hs := httptest.NewServer(srv)
 	t.Cleanup(func() {
 		srv.Close()
