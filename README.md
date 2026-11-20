@@ -1,5 +1,7 @@
 # AIGaming
 
+[![CI](https://github.com/s9891326/AIGaming/actions/workflows/ci.yml/badge.svg)](https://github.com/s9891326/AIGaming/actions/workflows/ci.yml)
+
 一個 **survivors-like**（割草 / 倖存者類）網頁遊戲的學習專案，目的是了解即時網頁遊戲如何運作：
 
 - **前端**：React + TypeScript + Vite（`web/`），遊戲畫面用 Canvas 2D 繪製
@@ -123,7 +125,7 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 ## 開發路線圖
 
 - [x] 專案骨架與開發環境（Gin、React、logger、Task、VS Code、Docker Compose）
-- [ ] GitHub Actions CI
+- [x] GitHub Actions CI（server / web / docker 三個 check）
 - [ ] Proto + 程式碼產生 + WebSocket 連線、Ping/Pong 延遲顯示
 - [ ] 遊戲迴圈 + 玩家移動（輸入 → tick → 快照）
 - [ ] 客戶端插值與相機跟隨
