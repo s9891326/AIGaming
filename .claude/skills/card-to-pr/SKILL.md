@@ -52,6 +52,8 @@ git switch -c feat/<N>-<簡短英文-slug>
 ### 3. 自行測試（全部通過才可以開 PR）
 
 1. `task check`：lint + format + test + build，必須全綠。
+   有新增或修改 goroutine / channel / 共用狀態時，再跑 `task test:race`（Linux 容器內的 `go test -race`；CI 也會跑，Windows 本機無法直接跑）。
+   測試裡讀取其他 goroutine 寫入的東西（例如日誌 buffer）要加鎖，並用「等待條件成立」取代固定 sleep。
 2. 實際跑起來驗證：
    - 開發模式：`task dev`（或分別 `task dev:server`、`task dev:web`），打開 http://localhost:5173。
    - 部署模式：`task up`，打開 http://localhost:3000，`docker compose ps` 兩個服務都 healthy，`docker compose logs server` 沒有錯誤。

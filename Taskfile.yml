@@ -44,6 +44,16 @@ tasks:
     cmds:
       - npm ci
 
+  # ---------- 協議 ----------
+  proto:
+    desc: 從 proto/ 產生 Go 與 TypeScript 程式碼
+    dir: web
+    deps: [web:install]
+    cmds:
+      - npx buf lint ../proto
+      - npx buf format -d --exit-code ../proto
+      - npx buf generate ../proto --template ../proto/buf.gen.yaml
+
   # ---------- 品質檢查 ----------
   test:
     desc: 執行所有測試
@@ -55,6 +65,11 @@ tasks:
     dir: server
     cmds:
       - go test ./...
+
+  test:race:
+    desc: 用 Linux 容器跑 go test -race（Windows 本機沒有 cgo/gcc，與 CI 相同條件）
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}/server:/src" -v aigaming-gomod:/go/pkg/mod -w /src golang:1.25 go test -race -count=3 ./...
 
   lint:
     desc: 靜態檢查（go vet、gofmt、oxlint）

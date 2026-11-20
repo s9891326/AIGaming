@@ -1,0 +1,13 @@
+# 由 `task proto` 執行（工作目錄是 web/，所以輸出路徑都相對於 web/）。
+# 產生的程式碼會提交進 repo，CI 會檢查是否與 .proto 一致。
+version: v2
+clean: true
+plugins:
+  # Go：用 server/go.mod 裡宣告的 tool 版本，不需要另外安裝 protoc-gen-go。
+  - local: [go, -C, ../server, tool, protoc-gen-go]
+    out: ../server/internal/pb
+    opt: paths=source_relative
+  # TypeScript：protobuf-es（web/node_modules/.bin/protoc-gen-es）
+  - local: protoc-gen-es
+    out: src/gen
+    opt: target=ts

@@ -12,7 +12,8 @@ export default defineConfig({
     // 開發時把 /api 與 /ws 代理到 Go 後端，前後端同源，所以後端不需要 CORS。
     proxy: {
       '/api': { target: backend, changeOrigin: true },
-      '/ws': { target: backend, ws: true, changeOrigin: true },
+      // /ws 不改 Host：後端會檢查 Origin 與 Host 是否同源（防止其他網站連進來）。
+      '/ws': { target: backend, ws: true },
     },
   },
 })
