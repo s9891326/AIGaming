@@ -21,6 +21,8 @@ import (
 
 	"aigaming/server/internal/config"
 	"aigaming/server/internal/httpserver"
+	"aigaming/server/internal/session"
+	"aigaming/server/internal/ws"
 	"aigaming/server/pkg/logger"
 )
 
@@ -49,9 +51,11 @@ func main() {
 }
 
 func run(cfg config.Config, log *slog.Logger) error {
+	wsServer := ws.NewServer(log, session.NewHandler(log, cfg.Version))
+
 	srv := &http.Server{
 		Addr:              cfg.Addr(),
-		Handler:           httpserver.NewRouter(cfg, log),
+		Handler:           httpserver.NewRouter(cfg, log, wsServer),
 		ReadHeaderTimeout: 5 * time.Second,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
@@ -75,7 +79,9 @@ func run(cfg config.Config, log *slog.Logger) error {
 	case <-ctx.Done():
 	}
 
-	log.Info("shutting down")
+	log.Info("shutting down", "connections", wsServer.Count())
+	// http.Server.Shutdown 不會處理已升級的 WebSocket 連線，要先自己關掉。
+	wsServer.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {

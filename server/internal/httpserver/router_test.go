@@ -17,7 +17,7 @@ import (
 
 func newTestRouter(buf *bytes.Buffer) *gin.Engine {
 	log := logger.New(logger.Options{Writer: buf, Level: slog.LevelDebug, Color: logger.ColorNever})
-	return NewRouter(config.Config{GinMode: gin.TestMode, Version: "test"}, log)
+	return NewRouter(config.Config{GinMode: gin.TestMode, Version: "test"}, log, nil)
 }
 
 func TestHealthz(t *testing.T) {
