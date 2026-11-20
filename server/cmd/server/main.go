@@ -20,6 +20,7 @@ import (
 	_ "time/tzdata" // 內嵌時區資料，distroless 映像檔裡也能用 TZ=Asia/Taipei
 
 	"aigaming/server/internal/config"
+	"aigaming/server/internal/game"
 	"aigaming/server/internal/httpserver"
 	"aigaming/server/internal/session"
 	"aigaming/server/internal/ws"
@@ -51,7 +52,13 @@ func main() {
 }
 
 func run(cfg config.Config, log *slog.Logger) error {
-	wsServer := ws.NewServer(log, session.NewHandler(log, cfg.Version))
+	// 遊戲迴圈在自己的 goroutine 執行，關機時在 WebSocket 連線都關閉後才停止。
+	loopCtx, stopLoop := context.WithCancel(context.Background())
+	defer stopLoop()
+	loop := game.NewLoop(log, game.DefaultLoopConfig)
+	go loop.Run(loopCtx)
+
+	wsServer := ws.NewServer(log, session.NewHandler(log, cfg.Version, loop))
 
 	srv := &http.Server{
 		Addr:              cfg.Addr(),
@@ -82,6 +89,7 @@ func run(cfg config.Config, log *slog.Logger) error {
 	log.Info("shutting down", "connections", wsServer.Count())
 	// http.Server.Shutdown 不會處理已升級的 WebSocket 連線，要先自己關掉。
 	wsServer.Close()
+	stopLoop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {

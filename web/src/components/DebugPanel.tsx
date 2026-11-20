@@ -10,8 +10,9 @@ interface Props {
  * 開發用：把收發的 protobuf 訊息解碼成 JSON 顯示，彌補 binary frame 在 DevTools 裡看不懂的缺點。
  */
 export function DebugPanel({ log, onClear }: Props) {
-  const [hidePing, setHidePing] = useState(false)
-  const entries = hidePing ? log.filter((e) => e.type !== 'ping' && e.type !== 'pong') : log
+  // 快照每秒 20 則，預設隱藏高頻訊息，才看得到 join / input 等事件。
+  const [hideHighFrequency, setHideHighFrequency] = useState(true)
+  const entries = hideHighFrequency ? log.filter((e) => !e.highFrequency) : log
 
   return (
     <section className="card debug">
@@ -20,10 +21,10 @@ export function DebugPanel({ log, onClear }: Props) {
         <label className="muted">
           <input
             type="checkbox"
-            checked={hidePing}
-            onChange={(e) => setHidePing(e.target.checked)}
+            checked={hideHighFrequency}
+            onChange={(e) => setHideHighFrequency(e.target.checked)}
           />{' '}
-          隱藏 ping / pong
+          隱藏高頻訊息（ping / pong / snapshot）
         </label>
         <button type="button" onClick={onClear}>
           清除

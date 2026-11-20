@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/game.proto.
  */
 export const file_game_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEiOQoNQ2xpZW50TWVzc2FnZRIdCgRwaW5nGAEgASgLMg0uZ2FtZS52MS5QaW5nSABCCQoHcGF5bG9hZCJeCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5nYW1lLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0uZ2FtZS52MS5Qb25nSABCCQoHcGF5bG9hZCI4CgdXZWxjb21lEhUKDWNvbm5lY3Rpb25faWQYASABKAkSFgoOc2VydmVyX3ZlcnNpb24YAiABKAkiHgoEUGluZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoASI2CgRQb25nEhYKDmNsaWVudF90aW1lX21zGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgBQixaKmFpZ2FtaW5nL3NlcnZlci9pbnRlcm5hbC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z");
+  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCK6AQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SABCCQoHcGF5bG9hZCI4CgdXZWxjb21lEhUKDWNvbm5lY3Rpb25faWQYASABKAkSFgoOc2VydmVyX3ZlcnNpb24YAiABKAkiHgoEUGluZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoASI2CgRQb25nEhYKDmNsaWVudF90aW1lX21zGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgBIg0KC0pvaW5SZXF1ZXN0InYKDEpvaW5BY2NlcHRlZBIRCglwbGF5ZXJfaWQYASABKA0SEwoLd29ybGRfd2lkdGgYAiABKAISFAoMd29ybGRfaGVpZ2h0GAMgASgCEhEKCXRpY2tfcmF0ZRgEIAEoDRIVCg1wbGF5ZXJfcmFkaXVzGAUgASgCIjoKC1BsYXllcklucHV0EgsKA3NlcRgBIAEoDRIOCgZtb3ZlX3gYAiABKAISDgoGbW92ZV95GAMgASgCIlwKDVdvcmxkU25hcHNob3QSDAoEdGljaxgBIAEoDRIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoARIlCgdwbGF5ZXJzGAMgAygLMhQuZ2FtZS52MS5QbGF5ZXJTdGF0ZSJHCgtQbGF5ZXJTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISFgoObGFzdF9pbnB1dF9zZXEYBCABKA1CLFoqYWlnYW1pbmcvc2VydmVyL2ludGVybmFsL3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM");
 
 /**
  * ClientMessage 是客戶端送給伺服器的信封。
@@ -31,6 +31,18 @@ export type ClientMessage = Message<"game.v1.ClientMessage"> & {
      */
     value: Ping;
     case: "ping";
+  } | {
+    /**
+     * @generated from field: game.v1.JoinRequest join = 2;
+     */
+    value: JoinRequest;
+    case: "join";
+  } | {
+    /**
+     * @generated from field: game.v1.PlayerInput input = 3;
+     */
+    value: PlayerInput;
+    case: "input";
   } | { case: undefined; value?: undefined };
 };
 
@@ -62,6 +74,18 @@ export type ServerMessage = Message<"game.v1.ServerMessage"> & {
      */
     value: Pong;
     case: "pong";
+  } | {
+    /**
+     * @generated from field: game.v1.JoinAccepted join_accepted = 3;
+     */
+    value: JoinAccepted;
+    case: "joinAccepted";
+  } | {
+    /**
+     * @generated from field: game.v1.WorldSnapshot snapshot = 4;
+     */
+    value: WorldSnapshot;
+    case: "snapshot";
   } | { case: undefined; value?: undefined };
 };
 
@@ -149,4 +173,172 @@ export type Pong = Message<"game.v1.Pong"> & {
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
   messageDesc(file_game_v1_game, 4);
+
+/**
+ * JoinRequest 請求加入遊戲。每條連線最多只會有一個角色，重複送出會被忽略。
+ *
+ * @generated from message game.v1.JoinRequest
+ */
+export type JoinRequest = Message<"game.v1.JoinRequest"> & {
+};
+
+/**
+ * Describes the message game.v1.JoinRequest.
+ * Use `create(JoinRequestSchema)` to create a new message.
+ */
+export const JoinRequestSchema: GenMessage<JoinRequest> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 5);
+
+/**
+ * JoinAccepted 回應 JoinRequest，告訴客戶端自己的角色與世界的基本參數。
+ * 伺服器保證在任何包含這個角色的 WorldSnapshot 之前送出。
+ *
+ * @generated from message game.v1.JoinAccepted
+ */
+export type JoinAccepted = Message<"game.v1.JoinAccepted"> & {
+  /**
+   * 自己的角色 ID，用來在快照中找出自己。
+   *
+   * @generated from field: uint32 player_id = 1;
+   */
+  playerId: number;
+
+  /**
+   * 世界大小（遊戲單位），座標範圍為 [0, width] × [0, height]。
+   *
+   * @generated from field: float world_width = 2;
+   */
+  worldWidth: number;
+
+  /**
+   * @generated from field: float world_height = 3;
+   */
+  worldHeight: number;
+
+  /**
+   * 伺服器每秒模擬幾次（tick）。
+   *
+   * @generated from field: uint32 tick_rate = 4;
+   */
+  tickRate: number;
+
+  /**
+   * 角色半徑（遊戲單位），用於繪製。
+   *
+   * @generated from field: float player_radius = 5;
+   */
+  playerRadius: number;
+};
+
+/**
+ * Describes the message game.v1.JoinAccepted.
+ * Use `create(JoinAcceptedSchema)` to create a new message.
+ */
+export const JoinAcceptedSchema: GenMessage<JoinAccepted> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 6);
+
+/**
+ * PlayerInput 是玩家目前想移動的方向，只在方向改變時送出。
+ * 伺服器會持續套用最後一次收到的輸入，直到下一次改變。
+ *
+ * @generated from message game.v1.PlayerInput
+ */
+export type PlayerInput = Message<"game.v1.PlayerInput"> & {
+  /**
+   * 遞增的輸入序號，之後的客戶端預測 / 校正會用到。
+   *
+   * @generated from field: uint32 seq = 1;
+   */
+  seq: number;
+
+  /**
+   * 移動方向，各分量在 [-1, 1]；長度超過 1 時伺服器會正規化（斜向不會比較快）。
+   *
+   * @generated from field: float move_x = 2;
+   */
+  moveX: number;
+
+  /**
+   * @generated from field: float move_y = 3;
+   */
+  moveY: number;
+};
+
+/**
+ * Describes the message game.v1.PlayerInput.
+ * Use `create(PlayerInputSchema)` to create a new message.
+ */
+export const PlayerInputSchema: GenMessage<PlayerInput> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 7);
+
+/**
+ * WorldSnapshot 是伺服器每個 tick 廣播的世界狀態。
+ *
+ * @generated from message game.v1.WorldSnapshot
+ */
+export type WorldSnapshot = Message<"game.v1.WorldSnapshot"> & {
+  /**
+   * 第幾個 tick（從伺服器啟動起算）。
+   *
+   * @generated from field: uint32 tick = 1;
+   */
+  tick: number;
+
+  /**
+   * 產生快照時伺服器的 Unix 時間（毫秒）。
+   *
+   * @generated from field: double server_time_ms = 2;
+   */
+  serverTimeMs: number;
+
+  /**
+   * @generated from field: repeated game.v1.PlayerState players = 3;
+   */
+  players: PlayerState[];
+};
+
+/**
+ * Describes the message game.v1.WorldSnapshot.
+ * Use `create(WorldSnapshotSchema)` to create a new message.
+ */
+export const WorldSnapshotSchema: GenMessage<WorldSnapshot> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 8);
+
+/**
+ * PlayerState 是快照中單一角色的狀態。
+ *
+ * @generated from message game.v1.PlayerState
+ */
+export type PlayerState = Message<"game.v1.PlayerState"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * 角色中心座標（遊戲單位）。
+   *
+   * @generated from field: float x = 2;
+   */
+  x: number;
+
+  /**
+   * @generated from field: float y = 3;
+   */
+  y: number;
+
+  /**
+   * 最後一個已套用的 PlayerInput.seq。
+   *
+   * @generated from field: uint32 last_input_seq = 4;
+   */
+  lastInputSeq: number;
+};
+
+/**
+ * Describes the message game.v1.PlayerState.
+ * Use `create(PlayerStateSchema)` to create a new message.
+ */
+export const PlayerStateSchema: GenMessage<PlayerState> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 9);
 
