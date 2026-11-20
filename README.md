@@ -29,12 +29,20 @@
 
 ```
 AIGaming/
-├── proto/              # .proto 協議定義（前後端共用）
-├── server/             # Go + Gin 後端
-│   ├── cmd/server/     #   進入點
-│   ├── internal/       #   專案內部套件（config、httpserver…）
-│   └── pkg/logger/     #   可重用的小套件：彩色 slog logger
-├── web/                # React 前端（nginx.conf 給 docker 用）
+├── proto/                  # .proto 協議定義（前後端共用）+ buf 設定
+├── server/                 # Go + Gin 後端
+│   ├── cmd/server/         #   進入點
+│   ├── internal/
+│   │   ├── httpserver/     #   Gin 路由、中介層
+│   │   ├── ws/             #   WebSocket：升級、讀寫 goroutine、心跳、連線管理
+│   │   ├── session/        #   每種訊息怎麼回應（目前：Welcome、Ping/Pong）
+│   │   └── pb/             #   ⚙ protoc-gen-go 產生的程式碼
+│   └── pkg/logger/         #   可重用的小套件：彩色 slog logger
+├── web/                    # React 前端（nginx.conf 給 docker 用）
+│   └── src/
+│       ├── net/            #   GameSocket（連線、重連）、useGameSocket hook
+│       ├── components/     #   UI 元件（連線狀態、debug 面板…）
+│       └── gen/            #   ⚙ protobuf-es 產生的程式碼
 ├── compose.yaml        # docker compose
 ├── Taskfile.yml        # 所有開發指令
 ├── .vscode/            # VS Code 設定、偵錯、工作
@@ -90,6 +98,37 @@ task down   # 停止
 - **工作**（`Ctrl+Shift+P` → `Tasks: Run Task`）：`dev: server + web`、`check`、`docker: up` 等，都是呼叫 Taskfile。
 - `Ctrl+Shift+B` 直接執行 `dev: server + web`。
 
+## 通訊協議（WebSocket + Protobuf）
+
+前端連到 `/ws`（開發時經 Vite、部署時經 nginx 代理到後端），之後雙方只傳 **binary frame**，每個 frame 是一個 protobuf 訊息：
+
+| 方向 | 信封 | 目前的內容（oneof） |
+|---|---|---|
+| 客戶端 → 伺服器 | `ClientMessage` | `Ping` |
+| 伺服器 → 客戶端 | `ServerMessage` | `Welcome`、`Pong` |
+
+```
+瀏覽器                                   Go server
+  │ ── HTTP GET /ws (Upgrade) ─────────▶ │  Origin 必須與 Host 同源
+  │ ◀──────── 101 Switching Protocols ── │
+  │ ◀──────── Welcome{connection_id} ─── │
+  │ ── Ping{client_time_ms} ───────────▶ │  每秒一次
+  │ ◀──── Pong{client_time_ms, server} ─ │  RTT = now - client_time_ms
+  │ ◀──────────── (WebSocket ping) ───── │  每 54 秒心跳，60 秒沒回應就斷線
+```
+
+- 後端每條連線有兩個 goroutine：`readPump`（唯一的讀取者）與 `writePump`（唯一的寫入者，也送心跳），其他地方只把訊息丟進 send channel。
+- 前端斷線會以 0.5s → 1s → 2s …（最多 5s）自動重連。
+- 開發模式下頁面底部有 **協議 Debug** 面板，把收發的訊息解碼成 JSON；部署版本在網址加 `?debug` 也能打開。
+
+修改協議：編輯 `proto/game/v1/*.proto`，然後執行
+
+```powershell
+task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
+```
+
+產生的程式碼要一起提交，CI 的 `proto` check 會確認沒有漏掉。
+
 ## 後端日誌
 
 `server/pkg/logger` 是自訂的 `slog.Handler`，開發時輸出彩色、一行一筆的易讀格式：
@@ -125,8 +164,8 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 ## 開發路線圖
 
 - [x] 專案骨架與開發環境（Gin、React、logger、Task、VS Code、Docker Compose）
-- [x] GitHub Actions CI（server / web / docker 三個 check）
-- [ ] Proto + 程式碼產生 + WebSocket 連線、Ping/Pong 延遲顯示
+- [x] GitHub Actions CI（server / web / proto / docker 四個 check）
+- [x] Proto + 程式碼產生 + WebSocket 連線、Ping/Pong 延遲顯示
 - [ ] 遊戲迴圈 + 玩家移動（輸入 → tick → 快照）
 - [ ] 客戶端插值與相機跟隨
 - [ ] 敵人生成、追蹤、碰撞扣血、Game Over

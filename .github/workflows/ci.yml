@@ -69,6 +69,42 @@ jobs:
       - name: build
         run: npm run build
 
+  proto:
+    name: proto (lint + codegen up to date)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - name: buf lint
+        run: npx buf lint ../proto
+      - name: buf format
+        run: npx buf format -d --exit-code ../proto
+      - name: buf generate
+        run: npx buf generate ../proto --template ../proto/buf.gen.yaml
+      - name: generated code is committed
+        run: |
+          if [ -n "$(git status --porcelain -- ../server/internal/pb src/gen)" ]; then
+            echo "::error::產生的程式碼與 .proto 不一致，請執行 task proto 並提交結果："
+            git status --porcelain -- ../server/internal/pb src/gen
+            git diff -- ../server/internal/pb src/gen | head -50
+            exit 1
+          fi
+
   docker:
     name: docker (compose build)
     runs-on: ubuntu-latest
