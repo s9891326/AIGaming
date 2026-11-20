@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+// game.v1 是瀏覽器與遊戲伺服器之間 WebSocket 傳輸的協議。
+// 每個 WebSocket binary frame 剛好是一個 ClientMessage（客戶端 → 伺服器）
+// 或 ServerMessage（伺服器 → 客戶端），用 oneof 區分訊息種類。
+package game.v1;
+
+option go_package = "aigaming/server/internal/pb/game/v1;gamev1";
+
+// ClientMessage 是客戶端送給伺服器的信封。
+message ClientMessage {
+  oneof payload {
+    Ping ping = 1;
+  }
+}
+
+// ServerMessage 是伺服器送給客戶端的信封。
+message ServerMessage {
+  oneof payload {
+    Welcome welcome = 1;
+    Pong pong = 2;
+  }
+}
+
+// Welcome 在連線建立後由伺服器立即送出。
+message Welcome {
+  // 這條連線在伺服器上的識別碼，方便對照日誌。
+  string connection_id = 1;
+  // 伺服器版本（APP_VERSION）。
+  string server_version = 2;
+}
+
+// Ping 由客戶端定期送出，用來量測往返延遲（RTT）。
+message Ping {
+  // 客戶端送出時的時間（毫秒）。伺服器原封不動放回 Pong，
+  // 客戶端收到後用「現在 - client_time_ms」得到 RTT，不需要兩邊時鐘同步。
+  double client_time_ms = 1;
+}
+
+// Pong 是伺服器對 Ping 的回應。
+message Pong {
+  // 原封不動帶回 Ping.client_time_ms。
+  double client_time_ms = 1;
+  // 伺服器處理時的 Unix 時間（毫秒），之後可用來估算時鐘偏移。
+  double server_time_ms = 2;
+}
