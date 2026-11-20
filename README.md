@@ -111,12 +111,12 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 
 ## 開發流程
 
-需求寫在 [GitHub Project 看板](https://github.com/s9891326?tab=projects)的卡片（Issue）上，一張卡片 = 一個 PR：
+需求寫在 [GitHub Issues](https://github.com/s9891326/AIGaming/issues?q=is%3Aopen+label%3Aenhancement) 的卡片上（標籤 `enhancement`，編號由小到大即開發順序），一張卡片 = 一個 PR：
 
-1. 從看板最上面的 Todo 卡片讀需求，移到 In Progress，開 `feat/<issue>-<slug>` 分支
+1. 讀編號最小的開啟中卡片，加上 `in-progress` 標籤，開 `feat/<issue>-<slug>` 分支
 2. 實作 + 測試，`task check` 全綠，並實際啟動逐條驗證驗收條件
 3. 開 PR（`Closes #N`），自我審查、CI 通過後 squash merge
-4. 卡片自動移到 Done
+4. Issue 自動關閉
 
 完整步驟寫在 [`.claude/skills/card-to-pr/SKILL.md`](.claude/skills/card-to-pr/SKILL.md)，在 Claude Code 裡說「做下一張卡片」就會照這個流程執行。
 
