@@ -1,0 +1,43 @@
+name: 功能卡片
+description: 一張卡片 = 一個 PR 的需求
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目標
+      description: 這個功能要解決什麼？完成後玩家 / 開發者能看到什麼？
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: 需求
+      description: 要做的事項，條列即可。
+      placeholder: |
+        - 後端：...
+        - 前端：...
+        - 協議：...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 驗收條件
+      description: 可以實際驗證的勾選清單，合併前每一項都要通過。
+      placeholder: |
+        - [ ] ...
+        - [ ] `task check` 通過
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: 不在範圍內
+      description: 這張卡片「不」做的事，避免範圍膨脹。
+  - type: textarea
+    id: notes
+    attributes:
+      label: 技術筆記
+      description: 設計方向、參考資料、要學的概念。
