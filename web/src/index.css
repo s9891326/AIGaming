@@ -6,6 +6,7 @@
   --accent: #b23a48;
   --ok: #4caf7d;
   --error: #e5534b;
+  --warn: #d9a83f;
 
   color-scheme: dark;
   font-family: system-ui, 'Segoe UI', 'Noto Sans TC', sans-serif;
@@ -27,7 +28,7 @@ body {
 
 .app {
   width: 100%;
-  max-width: 560px;
+  max-width: 960px;
   padding: 48px 16px;
 }
 
@@ -88,4 +89,82 @@ button {
 
 button:hover {
   border-color: var(--accent);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.status-open {
+  color: var(--ok);
+}
+
+.status-connecting {
+  color: var(--warn);
+}
+
+.status-closed {
+  color: var(--error);
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.85em;
+}
+
+/* ---------- 協議 debug 面板 ---------- */
+.debug-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.debug-header h2 {
+  margin: 0;
+  margin-right: auto;
+}
+
+.debug-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.debug-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 3%);
+  border-left: 3px solid var(--muted);
+}
+
+.debug-log code {
+  word-break: break-all;
+}
+
+.debug-in {
+  border-left-color: var(--ok) !important;
+}
+
+.debug-out {
+  border-left-color: var(--accent) !important;
+}
+
+.debug-meta {
+  font-size: 0.85em;
 }
