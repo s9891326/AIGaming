@@ -19,9 +19,9 @@ import (
 	"time"
 	_ "time/tzdata" // 內嵌時區資料，distroless 映像檔裡也能用 TZ=Asia/Taipei
 
-	"github.com/s9891326/AIGaming/server/internal/config"
-	"github.com/s9891326/AIGaming/server/internal/httpserver"
-	"github.com/s9891326/AIGaming/server/pkg/logger"
+	"aigaming/server/internal/config"
+	"aigaming/server/internal/httpserver"
+	"aigaming/server/pkg/logger"
 )
 
 func main() {

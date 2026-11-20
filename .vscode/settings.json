@@ -12,7 +12,7 @@
   "go.testFlags": ["-v", "-count=1"],
   "gopls": {
     "ui.semanticTokens": true,
-    "formatting.local": "github.com/s9891326/AIGaming"
+    "formatting.local": "aigaming/server"
   },
 
   "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },

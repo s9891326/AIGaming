@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/s9891326/AIGaming/server/pkg/logger"
+	"aigaming/server/pkg/logger"
 )
 
 // Config 是伺服器執行時設定。

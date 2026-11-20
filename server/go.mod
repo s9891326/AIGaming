@@ -1,4 +1,4 @@
-module github.com/s9891326/AIGaming/server
+module aigaming/server
 
 go 1.25.0
 
