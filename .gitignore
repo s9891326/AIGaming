@@ -1,0 +1,22 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Go
+server/bin/
+*.exe
+*.test
+*.out
+
+# Node
+node_modules/
+web/dist/
+*.log
+
+# Env
+.env
+.env.*
+!.env.example
