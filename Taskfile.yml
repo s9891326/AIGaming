@@ -66,7 +66,14 @@ tasks:
     dir: server
     cmds:
       - go vet ./...
-      - gofmt -l -d .
+      # gofmt -l 只會列出檔案、不會失敗，所以有輸出時要自己回傳錯誤（與 CI 相同）。
+      - |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "以下檔案未經 gofmt 排版（執行 task format 修正）："
+          echo "$unformatted"
+          exit 1
+        fi
 
   lint:web:
     dir: web
