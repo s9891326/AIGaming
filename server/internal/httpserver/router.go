@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/s9891326/AIGaming/server/internal/config"
+	"aigaming/server/internal/config"
 )
 
 // HealthResponse 是 GET /api/healthz 的回應內容。

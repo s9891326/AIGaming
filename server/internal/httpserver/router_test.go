@@ -11,8 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/s9891326/AIGaming/server/internal/config"
-	"github.com/s9891326/AIGaming/server/pkg/logger"
+	"aigaming/server/internal/config"
+	"aigaming/server/pkg/logger"
 )
 
 func newTestRouter(buf *bytes.Buffer) *gin.Engine {
