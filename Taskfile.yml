@@ -66,6 +66,11 @@ tasks:
     cmds:
       - go test ./...
 
+  test:race:
+    desc: 用 Linux 容器跑 go test -race（Windows 本機沒有 cgo/gcc，與 CI 相同條件）
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}/server:/src" -v aigaming-gomod:/go/pkg/mod -w /src golang:1.25 go test -race -count=3 ./...
+
   lint:
     desc: 靜態檢查（go vet、gofmt、oxlint）
     cmds:

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,24 +19,42 @@ import (
 	"aigaming/server/pkg/logger"
 )
 
+// syncBuffer 是可以並行讀寫的 bytes.Buffer：伺服器在自己的 goroutine 寫日誌，測試同時讀取。
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 type testEnv struct {
 	srv  *ws.Server
 	http *httptest.Server
 	url  string
-	logs *bytes.Buffer
+	logs *syncBuffer
 }
 
 func newEnv(t *testing.T) *testEnv {
 	t.Helper()
-	var logs bytes.Buffer
-	log := logger.New(logger.Options{Writer: &logs, Level: slog.LevelDebug, Color: logger.ColorNever})
+	logs := &syncBuffer{}
+	log := logger.New(logger.Options{Writer: logs, Level: slog.LevelDebug, Color: logger.ColorNever})
 	srv := ws.NewServer(log, session.NewHandler(log, "test"))
 	hs := httptest.NewServer(srv)
 	t.Cleanup(func() {
 		srv.Close()
 		hs.Close()
 	})
-	return &testEnv{srv: srv, http: hs, url: "ws" + strings.TrimPrefix(hs.URL, "http"), logs: &logs}
+	return &testEnv{srv: srv, http: hs, url: "ws" + strings.TrimPrefix(hs.URL, "http"), logs: logs}
 }
 
 func (e *testEnv) dial(t *testing.T) *websocket.Conn {
@@ -90,6 +109,17 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	}
 }
 
+func (e *testEnv) waitForLog(t *testing.T, substr string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(e.logs.String(), substr) {
+		if time.Now().After(deadline) {
+			t.Fatalf("log %q not found, got:\n%s", substr, e.logs.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestWelcomeThenPingPong(t *testing.T) {
 	env := newEnv(t)
 	c := env.dial(t)
@@ -131,10 +161,8 @@ func TestMalformedMessagesAreIgnored(t *testing.T) {
 	if readServerMsg(t, c).GetPong() == nil {
 		t.Fatal("connection should still answer Ping after bad messages")
 	}
-	logs := env.logs.String()
-	if !strings.Contains(logs, "ignoring malformed message") || !strings.Contains(logs, "ignoring non-binary message") {
-		t.Errorf("want warnings for bad messages, got logs:\n%s", logs)
-	}
+	env.waitForLog(t, "ignoring malformed message")
+	env.waitForLog(t, "ignoring non-binary message")
 }
 
 func TestCrossOriginRejected(t *testing.T) {
@@ -163,10 +191,9 @@ func TestConnectionCountAndLogs(t *testing.T) {
 	_ = c1.Close()
 	waitFor(t, "1 connection", func() bool { return env.srv.Count() == 1 })
 
-	logs := env.logs.String()
-	if !strings.Contains(logs, "client connected") || !strings.Contains(logs, "client disconnected") {
-		t.Errorf("want connect/disconnect logs, got:\n%s", logs)
-	}
+	// 斷線日誌在連線數更新之後才寫入，所以要等日誌本身出現。
+	env.waitForLog(t, "client connected")
+	env.waitForLog(t, "client disconnected")
 }
 
 func TestServerCloseDisconnectsClients(t *testing.T) {
