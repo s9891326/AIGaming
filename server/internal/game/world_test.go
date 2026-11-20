@@ -10,7 +10,7 @@ const eps = 1e-9
 func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 
 func testConfig() WorldConfig {
-	return WorldConfig{Width: 1000, Height: 600, PlayerSpeed: 100, PlayerRadius: 10}
+	return WorldConfig{Width: 1000, Height: 600, PlayerSpeed: 100, PlayerRadius: 10, InputDt: 0.05, MaxInputBudget: 0.25}
 }
 
 func TestNormalizeInput(t *testing.T) {
@@ -51,36 +51,66 @@ func TestAddPlayerSpawnsAtCenterWithUniqueIDs(t *testing.T) {
 	}
 }
 
-func TestStepMovesBySpeedTimesDt(t *testing.T) {
+// applyN 送 n 筆同方向的輸入，每筆之間推進一個 tick（模擬正常速度的客戶端）。
+func applyN(w *World, id PlayerID, n int, x, y float64) {
+	seq := w.Player(id).LastInputSeq
+	for range n {
+		seq++
+		w.ApplyInput(id, seq, x, y)
+		w.Step(w.cfg.InputDt)
+	}
+}
+
+func TestEachInputMovesOneInputDt(t *testing.T) {
 	w := NewWorld(testConfig())
 	id := w.AddPlayer()
-	w.SetInput(id, 1, 1, 0)
 
-	w.Step(0.5) // 100 單位/秒 × 0.5 秒 = 50
-
-	if p := w.Player(id).Pos; !near(p.X, 550) || !near(p.Y, 300) {
-		t.Fatalf("pos = %+v, want (550, 300)", p)
+	if r := w.ApplyInput(id, 1, 1, 0); r != InputApplied {
+		t.Fatalf("result = %v, want applied", r)
 	}
-	if w.Tick() != 1 {
-		t.Fatalf("tick = %d, want 1", w.Tick())
+	// 100 單位/秒 × 0.05 秒 = 5
+	if p := w.Player(id).Pos; !near(p.X, 505) || !near(p.Y, 300) {
+		t.Fatalf("pos = %+v, want (505, 300)", p)
+	}
+
+	applyN(w, id, 10, 1, 0)
+	if p := w.Player(id).Pos; !near(p.X, 555) {
+		t.Fatalf("after 11 inputs x = %v, want 555", p.X)
+	}
+	if w.Player(id).LastInputSeq != 11 {
+		t.Fatalf("last seq = %d, want 11", w.Player(id).LastInputSeq)
+	}
+}
+
+func TestStepAloneDoesNotMove(t *testing.T) {
+	w := NewWorld(testConfig())
+	id := w.AddPlayer()
+	w.ApplyInput(id, 1, 1, 0)
+	before := w.Player(id).Pos
+	for range 20 {
+		w.Step(0.05)
+	}
+	if w.Player(id).Pos != before {
+		t.Fatal("without inputs the player must not move (movement is input-driven)")
+	}
+	if w.Tick() != 20 {
+		t.Fatalf("tick = %d, want 20", w.Tick())
 	}
 }
 
 func TestDiagonalIsNotFaster(t *testing.T) {
 	w := NewWorld(testConfig())
 	straight, diagonal := w.AddPlayer(), w.AddPlayer()
-	w.SetInput(straight, 1, 1, 0)
-	w.SetInput(diagonal, 1, 1, 1)
 	start := w.Player(diagonal).Pos
-
-	w.Step(0.5)
+	applyN(w, straight, 5, 1, 0)
+	applyN(w, diagonal, 5, 1, 1)
 
 	moved := func(id PlayerID) float64 {
 		p := w.Player(id).Pos
 		return math.Hypot(p.X-start.X, p.Y-start.Y)
 	}
-	if !near(moved(straight), moved(diagonal)) {
-		t.Fatalf("straight moved %v, diagonal moved %v; want equal", moved(straight), moved(diagonal))
+	if !near(moved(straight), 25) || !near(moved(diagonal), 25) {
+		t.Fatalf("straight moved %v, diagonal moved %v; want both 25", moved(straight), moved(diagonal))
 	}
 }
 
@@ -90,10 +120,7 @@ func TestPlayersStayInsideBounds(t *testing.T) {
 	for _, d := range dirs {
 		w := NewWorld(cfg)
 		id := w.AddPlayer()
-		w.SetInput(id, 1, d.X, d.Y)
-		for range 1000 { // 遠超過走到牆邊所需的時間
-			w.Step(0.05)
-		}
+		applyN(w, id, 400, d.X, d.Y) // 遠超過走到牆邊所需的量
 		p := w.Player(id).Pos
 		r := cfg.PlayerRadius
 		if p.X < r || p.X > cfg.Width-r || p.Y < r || p.Y > cfg.Height-r {
@@ -106,17 +133,66 @@ func TestPlayersStayInsideBounds(t *testing.T) {
 	}
 }
 
-func TestSetInputIgnoresUnknownPlayerAndStaleSeq(t *testing.T) {
+func TestApplyInputRejectsUnknownAndStale(t *testing.T) {
 	w := NewWorld(testConfig())
 	id := w.AddPlayer()
 
-	w.SetInput(999, 1, 1, 0) // 不存在的角色：不應 panic
+	if r := w.ApplyInput(999, 1, 1, 0); r != InputUnknown {
+		t.Fatalf("unknown player: %v", r)
+	}
+	w.ApplyInput(id, 5, 1, 0)
+	pos := w.Player(id).Pos
+	for _, seq := range []uint32{5, 3} {
+		if r := w.ApplyInput(id, seq, 1, 0); r != InputStale {
+			t.Fatalf("seq %d: result %v, want stale", seq, r)
+		}
+	}
+	if w.Player(id).Pos != pos || w.Player(id).LastInputSeq != 5 {
+		t.Fatal("stale input must not move the player")
+	}
+}
 
-	w.SetInput(id, 5, 1, 0)
-	w.SetInput(id, 3, -1, 0) // 舊的序號：忽略
-	p := w.Player(id)
-	if p.Move != (Vec2{1, 0}) || p.LastInputSeq != 5 {
-		t.Fatalf("move = %+v seq = %d; stale input should be ignored", p.Move, p.LastInputSeq)
+func TestInputBudgetPreventsSpeedHack(t *testing.T) {
+	w := NewWorld(testConfig())
+	id := w.AddPlayer()
+
+	// 一口氣送 100 筆（沒有推進 tick）：只有預算內的 0.25 / 0.05 = 5 筆會被套用。
+	applied := 0
+	for seq := uint32(1); seq <= 100; seq++ {
+		if w.ApplyInput(id, seq, 1, 0) == InputApplied {
+			applied++
+		}
+	}
+	if applied != 5 {
+		t.Fatalf("applied %d inputs in a burst, want 5", applied)
+	}
+
+	// 長時間下來，每秒最多只能移動 1 秒的量：連續 2 秒、每 tick 送 3 筆。
+	w2 := NewWorld(testConfig())
+	id2 := w2.AddPlayer()
+	start := w2.Player(id2).Pos.X
+	seq := uint32(0)
+	for range 40 {
+		for range 3 {
+			seq++
+			w2.ApplyInput(id2, seq, 1, 0)
+		}
+		w2.Step(0.05)
+	}
+	// 2 秒 × 100 單位/秒 = 200，加上初始預算 0.25 秒 = 25。
+	if moved := w2.Player(id2).Pos.X - start; moved > 225+1e-6 {
+		t.Fatalf("moved %v in 2s with 3x inputs, want ≤ 225", moved)
+	}
+}
+
+func TestBudgetIsCapped(t *testing.T) {
+	w := NewWorld(testConfig())
+	id := w.AddPlayer()
+	for range 100 {
+		w.Step(0.05) // 閒置很久
+	}
+	if b := w.Player(id).InputBudget; !near(b, 0.25) {
+		t.Fatalf("budget = %v, want capped at 0.25", b)
 	}
 }
 

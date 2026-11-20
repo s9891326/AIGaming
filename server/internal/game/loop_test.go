@@ -110,11 +110,17 @@ func TestInputMovesPlayer(t *testing.T) {
 	eventually(t, "JoinAccepted", func() bool { return len(sink.all()) > 0 })
 	id := sink.all()[0].GetJoinAccepted().GetPlayerId()
 
-	l.Input("conn-a", 1, 1, 0)
+	// 每筆輸入移動一個 tick：速度 100 × 0.01 秒 = 1 單位；10 筆在預算（5 個 tick）內分兩批送。
+	for seq := uint32(1); seq <= 10; seq++ {
+		l.Input("conn-a", seq, 1, 0)
+		if seq == 5 {
+			time.Sleep(80 * time.Millisecond) // 讓預算回補
+		}
+	}
 
-	eventually(t, "player moved right with seq acked", func() bool {
+	eventually(t, "player moved 10 units right with seq acked", func() bool {
 		p := findPlayer(sink.lastSnapshot(), id)
-		return p != nil && p.GetX() > 520 && p.GetY() == 300 && p.GetLastInputSeq() == 1
+		return p != nil && p.GetX() == 510 && p.GetY() == 300 && p.GetLastInputSeq() == 10
 	})
 }
 

@@ -48,6 +48,11 @@ type Loop struct {
 
 // NewLoop 建立遊戲迴圈，需要呼叫 Run 才會開始。
 func NewLoop(log *slog.Logger, cfg LoopConfig) *Loop {
+	// 一筆輸入 = 一個 tick 的移動，兩者必須一致，客戶端預測才會與伺服器相同。
+	cfg.World.InputDt = 1 / float64(cfg.TickRate)
+	if cfg.World.MaxInputBudget <= 0 {
+		cfg.World.MaxInputBudget = 5 * cfg.World.InputDt
+	}
 	return &Loop{
 		log:     log,
 		cfg:     cfg,
@@ -106,6 +111,7 @@ func (l *Loop) Join(key string, sink Sink) {
 				WorldHeight:  float32(l.cfg.World.Height),
 				TickRate:     uint32(l.cfg.TickRate),
 				PlayerRadius: float32(l.cfg.World.PlayerRadius),
+				PlayerSpeed:  float32(l.cfg.World.PlayerSpeed),
 			},
 		}})
 		l.log.Info("player joined", "conn", key, "player", id, "players", len(l.members))
@@ -125,11 +131,16 @@ func (l *Loop) Leave(key string) {
 	})
 }
 
-// Input 更新 key 的角色移動方向。
+// Input 讓 key 的角色往 (x, y) 移動一個 tick 的量（收到就套用，結果出現在下一個快照）。
 func (l *Loop) Input(key string, seq uint32, x, y float64) {
 	l.enqueue(func(l *Loop) {
-		if m, ok := l.members[key]; ok {
-			l.world.SetInput(m.id, seq, x, y)
+		m, ok := l.members[key]
+		if !ok {
+			return
+		}
+		if r := l.world.ApplyInput(m.id, seq, x, y); r == InputOverBudget {
+			// 偶爾發生是網路抖動；持續發生代表客戶端送太快（時鐘偏快或作弊）。
+			l.log.Debug("input over budget", "conn", key, "player", m.id, "seq", seq)
 		}
 	})
 }
