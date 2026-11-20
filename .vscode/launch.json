@@ -1,0 +1,34 @@
+{
+  // F5 偵錯設定。選「Full Stack」可同時偵錯 Go 後端（中斷點）與瀏覽器前端。
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Server (Go)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/server/cmd/server",
+      "cwd": "${workspaceFolder}/server",
+      "env": {
+        "LOG_LEVEL": "debug",
+        "LOG_COLOR": "always"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Web (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/web",
+      "preLaunchTask": "dev: web"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack",
+      "configurations": ["Server (Go)", "Web (Chrome)"],
+      "stopAll": true
+    }
+  ]
+}

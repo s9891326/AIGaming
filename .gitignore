@@ -2,8 +2,8 @@
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/*
-!.vscode/extensions.json
+.claude/settings.local.json
+.claude/launch.json
 
 # Go
 server/bin/
@@ -20,3 +20,6 @@ web/dist/
 .env
 .env.*
 !.env.example
+
+# Task runner cache
+.task/

@@ -1,0 +1,29 @@
+# 用法：task up（或 docker compose up --build -d），然後打開 http://localhost:3000
+name: aigaming
+
+services:
+  server:
+    build:
+      context: ./server
+    environment:
+      GIN_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-pretty}
+      LOG_COLOR: always # docker logs 也能看到顏色
+      APP_VERSION: ${APP_VERSION:-docker}
+      TZ: ${TZ:-Asia/Taipei}
+    # 後端不對外開 port，只透過 web 的 nginx 代理存取；
+    # 需要直接打 API 時可取消下面註解。
+    # ports:
+    #   - "8080:8080"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped

@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "golang.go",
+    "oxc.oxc-vscode",
+    "esbenp.prettier-vscode",
+    "task.vscode-task",
+    "ms-azuretools.vscode-containers",
+    "bufbuild.vscode-buf",
+    "editorconfig.editorconfig"
+  ]
+}

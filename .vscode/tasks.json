@@ -1,0 +1,62 @@
+{
+  // 這些工作都呼叫 Taskfile.yml 裡的指令，Ctrl+Shift+P → "Tasks: Run Task" 執行。
+  // 需要先安裝 Task：go install github.com/go-task/task/v3/cmd/task@latest
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: server + web",
+      "detail": "同時啟動後端（8080）與前端（5173）",
+      "type": "shell",
+      "command": "task dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "dev: server",
+      "type": "shell",
+      "command": "task dev:server",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "dev: web",
+      "detail": "Vite 開發伺服器；偵錯 Web 時會自動啟動",
+      "type": "shell",
+      "command": "task dev:web",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "VITE v",
+          "endsPattern": "Local:"
+        }
+      },
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "check",
+      "detail": "lint + test + build（提交 PR 前跑）",
+      "type": "shell",
+      "command": "task check",
+      "problemMatcher": ["$go"],
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "docker: up",
+      "type": "shell",
+      "command": "task up",
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: down",
+      "type": "shell",
+      "command": "task down",
+      "problemMatcher": []
+    }
+  ]
+}

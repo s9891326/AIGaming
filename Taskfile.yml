@@ -1,0 +1,129 @@
+# 專案指令入口（類似 Makefile，但跨平台）。
+# 安裝：go install github.com/go-task/task/v3/cmd/task@latest
+# 列出所有指令：task --list
+version: '3'
+
+vars:
+  SERVER_BIN: bin/server{{exeExt}}
+
+tasks:
+  default:
+    desc: 列出所有指令
+    cmds:
+      - task --list
+    silent: true
+
+  # ---------- 開發 ----------
+  dev:
+    desc: 同時啟動後端與前端（Ctrl+C 一起停止）
+    deps: [dev:server, dev:web]
+
+  dev:server:
+    desc: 啟動 Go 後端（http://localhost:8080）
+    dir: server
+    env:
+      LOG_LEVEL: debug
+      LOG_COLOR: always
+    cmds:
+      - go run ./cmd/server
+
+  dev:web:
+    desc: 啟動 Vite 前端（http://localhost:5173）
+    dir: web
+    deps: [web:install]
+    env:
+      FORCE_COLOR: '1'
+    cmds:
+      - npm run dev
+
+  web:install:
+    desc: 安裝前端套件（package-lock.json 有變動才會執行）
+    dir: web
+    sources: [package.json, package-lock.json]
+    generates: [node_modules/.package-lock.json]
+    cmds:
+      - npm ci
+
+  # ---------- 品質檢查 ----------
+  test:
+    desc: 執行所有測試
+    cmds:
+      - task: test:server
+
+  test:server:
+    desc: 執行後端測試
+    dir: server
+    cmds:
+      - go test ./...
+
+  lint:
+    desc: 靜態檢查（go vet、gofmt、oxlint）
+    cmds:
+      - task: lint:server
+      - task: lint:web
+
+  lint:server:
+    dir: server
+    cmds:
+      - go vet ./...
+      - gofmt -l -d .
+
+  lint:web:
+    dir: web
+    deps: [web:install]
+    cmds:
+      - npm run lint
+      - npm run format:check
+
+  format:
+    desc: 自動排版（gofmt、prettier）
+    cmds:
+      - cmd: gofmt -w .
+        dir: server
+      - cmd: npm run format
+        dir: web
+
+  check:
+    desc: 提交 PR 前跑一次：lint + test + build
+    cmds:
+      - task: lint
+      - task: test
+      - task: build
+
+  # ---------- 建置 ----------
+  build:
+    desc: 建置後端執行檔與前端靜態檔
+    deps: [build:server, build:web]
+
+  build:server:
+    dir: server
+    cmds:
+      - go build -o {{.SERVER_BIN}} ./cmd/server
+
+  build:web:
+    dir: web
+    deps: [web:install]
+    cmds:
+      - npm run build
+
+  # ---------- Docker ----------
+  up:
+    desc: 用 docker compose 建置並啟動所有服務（http://localhost:3000）
+    cmds:
+      - docker compose up --build -d
+      - docker compose ps
+
+  down:
+    desc: 停止並移除 docker compose 服務
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: 追蹤 docker compose 日誌
+    cmds:
+      - docker compose logs -f
+
+  clean:
+    desc: 刪除建置產物
+    cmds:
+      - cmd: '{{if eq OS "windows"}}powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue server/bin, web/dist; exit 0"{{else}}rm -rf server/bin web/dist{{end}}'

@@ -1,0 +1,30 @@
+{
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+  },
+  "go.toolsManagement.autoUpdate": true,
+  "go.testFlags": ["-v", "-count=1"],
+  "gopls": {
+    "ui.semanticTokens": true,
+    "formatting.local": "github.com/s9891326/AIGaming"
+  },
+
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "prettier.prettierPath": "./web/node_modules/prettier",
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "server/bin": true
+  }
+}
