@@ -444,8 +444,10 @@ type JoinAccepted struct {
 	WorldHeight float32 `protobuf:"fixed32,3,opt,name=world_height,json=worldHeight,proto3" json:"world_height,omitempty"`
 	// 伺服器每秒模擬幾次（tick）。
 	TickRate uint32 `protobuf:"varint,4,opt,name=tick_rate,json=tickRate,proto3" json:"tick_rate,omitempty"`
-	// 角色半徑（遊戲單位），用於繪製。
-	PlayerRadius  float32 `protobuf:"fixed32,5,opt,name=player_radius,json=playerRadius,proto3" json:"player_radius,omitempty"`
+	// 角色半徑（遊戲單位），用於繪製與客戶端預測的邊界計算。
+	PlayerRadius float32 `protobuf:"fixed32,5,opt,name=player_radius,json=playerRadius,proto3" json:"player_radius,omitempty"`
+	// 角色移動速度（單位 / 秒），客戶端預測用，必須與伺服器算法一致。
+	PlayerSpeed   float32 `protobuf:"fixed32,6,opt,name=player_speed,json=playerSpeed,proto3" json:"player_speed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -515,11 +517,20 @@ func (x *JoinAccepted) GetPlayerRadius() float32 {
 	return 0
 }
 
-// PlayerInput 是玩家目前想移動的方向，只在方向改變時送出。
-// 伺服器會持續套用最後一次收到的輸入，直到下一次改變。
+func (x *JoinAccepted) GetPlayerSpeed() float32 {
+	if x != nil {
+		return x.PlayerSpeed
+	}
+	return 0
+}
+
+// PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
+// 移動時客戶端每個 tick 送一筆，不動時不送。伺服器收到就套用，
+// 並在快照中回報 last_input_seq；客戶端從伺服器位置重播尚未確認的輸入（預測 / 校正）。
+// 伺服器以時間預算限制每秒可套用的輸入數，超出的會被丟棄（防止加速作弊）。
 type PlayerInput struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 遞增的輸入序號，之後的客戶端預測 / 校正會用到。
+	// 遞增的輸入序號（從 1 開始）。
 	Seq uint32 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
 	// 移動方向，各分量在 [-1, 1]；長度超過 1 時伺服器會正規化（斜向不會比較快）。
 	MoveX         float32 `protobuf:"fixed32,2,opt,name=move_x,json=moveX,proto3" json:"move_x,omitempty"`
@@ -737,14 +748,15 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_ms\x18\x01 \x01(\x01R\fclientTimeMs\x12$\n" +
 	"\x0eserver_time_ms\x18\x02 \x01(\x01R\fserverTimeMs\"\r\n" +
-	"\vJoinRequest\"\xb1\x01\n" +
+	"\vJoinRequest\"\xd4\x01\n" +
 	"\fJoinAccepted\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x1f\n" +
 	"\vworld_width\x18\x02 \x01(\x02R\n" +
 	"worldWidth\x12!\n" +
 	"\fworld_height\x18\x03 \x01(\x02R\vworldHeight\x12\x1b\n" +
 	"\ttick_rate\x18\x04 \x01(\rR\btickRate\x12#\n" +
-	"\rplayer_radius\x18\x05 \x01(\x02R\fplayerRadius\"M\n" +
+	"\rplayer_radius\x18\x05 \x01(\x02R\fplayerRadius\x12!\n" +
+	"\fplayer_speed\x18\x06 \x01(\x02R\vplayerSpeed\"M\n" +
 	"\vPlayerInput\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\rR\x03seq\x12\x15\n" +
 	"\x06move_x\x18\x02 \x01(\x02R\x05moveX\x12\x15\n" +

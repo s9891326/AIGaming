@@ -1,5 +1,5 @@
 import { create, toJson, type JsonValue } from '@bufbuild/protobuf'
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ClientMessageSchema,
   JoinRequestSchema,
@@ -8,15 +8,15 @@ import {
   ServerMessageSchema,
   type ClientMessage,
   type ServerMessage,
-  type WorldSnapshot,
 } from '../gen/game/v1/game_pb'
+import { GameClient, type JoinInfo } from '../game/GameClient'
 import { GameSocket, defaultSocketUrl, type ConnectionStatus } from './GameSocket'
 
 const PING_INTERVAL_MS = 1000
 const RTT_SAMPLES = 10
 const LOG_LIMIT = 100
-/** 高頻訊息（每秒數次以上），另外存放，避免把 join / input 等重要訊息擠出紀錄。 */
-const HIGH_FREQUENCY = new Set(['ping', 'pong', 'snapshot'])
+/** 高頻訊息（每秒數次以上），另外存放，避免把 join 等重要訊息擠出紀錄。 */
+const HIGH_FREQUENCY = new Set(['ping', 'pong', 'snapshot', 'input'])
 const HIGH_FREQUENCY_LIMIT = 40
 
 export interface MessageLogEntry {
@@ -29,19 +29,12 @@ export interface MessageLogEntry {
   highFrequency: boolean
 }
 
-/** 加入遊戲後伺服器告知的資訊。 */
-export interface JoinInfo {
-  playerId: number
-  worldWidth: number
-  worldHeight: number
-  tickRate: number
-  playerRadius: number
-}
-
 export interface GameSocketOptions {
   url?: string
   /** 是否保留收發紀錄給 debug 面板（每則訊息都要轉 JSON，關閉可省效能）。 */
   recordLog?: boolean
+  /** 開發用：模擬往返延遲（毫秒）。 */
+  simulatedLagMs?: number
 }
 
 export interface GameSocketState {
@@ -58,12 +51,10 @@ export interface GameSocketState {
   /** 加入遊戲後才有值；斷線時清空。 */
   join?: JoinInfo
   /**
-   * 最新的世界快照。存在 ref 而不是 state：每秒 20 次的更新不需要觸發 React 重新渲染，
-   * Canvas 在 requestAnimationFrame 裡自己讀取。
+   * 客戶端遊戲狀態（預測、插值）。不放進 React state：
+   * 每秒數十次的更新由 GameCanvas 在 requestAnimationFrame 裡直接讀取。
    */
-  snapshotRef: RefObject<WorldSnapshot | undefined>
-  /** 設定移動方向；與上一次相同時不會送出。 */
-  setMoveInput(x: number, y: number): void
+  game: GameClient
   log: MessageLogEntry[]
   clearLog(): void
 }
@@ -71,13 +62,14 @@ export interface GameSocketState {
 /**
  * 連線管理 hook：
  * - 建立 GameSocket（自動重連）、每秒送 Ping 量測 RTT
- * - 收到 Welcome 就送 JoinRequest 加入遊戲（重新整理或重連都會重新加入）
- * - 保存最新快照、送出移動輸入
+ * - 收到 Welcome 就送 JoinRequest（重新整理或重連都會重新加入）
+ * - 把 JoinAccepted / WorldSnapshot 交給 GameClient，並替它送出輸入
  * - 保留收發紀錄給 debug 面板
  */
 export function useGameSocket({
   url = defaultSocketUrl(),
   recordLog = false,
+  simulatedLagMs = 0,
 }: GameSocketOptions = {}): GameSocketState {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [retryInMs, setRetryInMs] = useState<number>()
@@ -89,37 +81,9 @@ export function useGameSocket({
   const [log, setLog] = useState<MessageLogEntry[]>([])
   const samples = useRef<number[]>([])
   const nextLogId = useRef(0)
-  const snapshotRef = useRef<WorldSnapshot | undefined>(undefined)
-  const socketRef = useRef<GameSocket | null>(null)
-  const joinedRef = useRef(false)
-  /** 目前的移動方向與序號；重新加入時要把目前方向補送給伺服器。 */
-  const inputRef = useRef({ x: 0, y: 0, seq: 0 })
 
-  const sendInput = useCallback(() => {
-    const socket = socketRef.current
-    if (!socket || !joinedRef.current) return
-    const input = inputRef.current
-    input.seq += 1
-    socket.send(
-      create(ClientMessageSchema, {
-        payload: {
-          case: 'input',
-          value: create(PlayerInputSchema, { seq: input.seq, moveX: input.x, moveY: input.y }),
-        },
-      }),
-    )
-  }, [])
-
-  const setMoveInput = useCallback(
-    (x: number, y: number) => {
-      const input = inputRef.current
-      if (input.x === x && input.y === y) return
-      input.x = x
-      input.y = y
-      sendInput()
-    },
-    [sendInput],
-  )
+  // GameClient 只建立一次，跨重連保留；送出輸入的函式在連線建立時接上。
+  const [game] = useState(() => new GameClient())
 
   useEffect(() => {
     const record = (
@@ -144,77 +108,90 @@ export function useGameSocket({
       }
       setLog((prev) => {
         // 兩類分開限制數量，再依時間（id）合併。
-        const next = [entry, ...prev]
         let hf = 0
         let normal = 0
-        return next.filter((e) =>
+        return [entry, ...prev].filter((e) =>
           e.highFrequency ? ++hf <= HIGH_FREQUENCY_LIMIT : ++normal <= LOG_LIMIT,
         )
       })
     }
 
-    const socket = new GameSocket(url, {
-      onStatus(s, info) {
-        setStatus(s)
-        setAttempt(info.attempt)
-        setRetryInMs(info.retryInMs)
-        if (s !== 'open') {
-          setWelcome(undefined)
-          setRtt(undefined)
-          setRttAvg(undefined)
-          setJoin(undefined)
-          joinedRef.current = false
-          snapshotRef.current = undefined
-          samples.current = []
-        }
-      },
-      onSent(msg, bytes) {
-        record('out', msg, bytes)
-      },
-      onMessage(msg, bytes) {
-        record('in', msg, bytes)
-        switch (msg.payload.case) {
-          case 'welcome':
-            setWelcome({
-              id: msg.payload.value.connectionId,
-              version: msg.payload.value.serverVersion,
-            })
-            socket.send(
-              create(ClientMessageSchema, {
-                payload: { case: 'join', value: create(JoinRequestSchema) },
-              }),
-            )
-            break
-          case 'joinAccepted': {
-            const v = msg.payload.value
-            setJoin({
-              playerId: v.playerId,
-              worldWidth: v.worldWidth,
-              worldHeight: v.worldHeight,
-              tickRate: v.tickRate,
-              playerRadius: v.playerRadius,
-            })
-            joinedRef.current = true
-            // 加入前就按著方向鍵的話，補送目前方向（伺服器上的新角色是靜止的）。
-            if (inputRef.current.x !== 0 || inputRef.current.y !== 0) sendInput()
-            break
+    const socket = new GameSocket(
+      url,
+      {
+        onStatus(s, info) {
+          setStatus(s)
+          setAttempt(info.attempt)
+          setRetryInMs(info.retryInMs)
+          if (s !== 'open') {
+            setWelcome(undefined)
+            setRtt(undefined)
+            setRttAvg(undefined)
+            setJoin(undefined)
+            game.reset()
+            game.setRtt(undefined)
+            samples.current = []
           }
-          case 'snapshot':
-            snapshotRef.current = msg.payload.value
-            break
-          case 'pong': {
-            // 用本地的單調時鐘計算，不受兩邊時鐘不同步影響。
-            const sample = performance.now() - msg.payload.value.clientTimeMs
-            const s = [...samples.current, sample].slice(-RTT_SAMPLES)
-            samples.current = s
-            setRtt(sample)
-            setRttAvg(s.reduce((a, b) => a + b, 0) / s.length)
-            break
+        },
+        onSent(msg, bytes) {
+          record('out', msg, bytes)
+        },
+        onMessage(msg, bytes) {
+          record('in', msg, bytes)
+          switch (msg.payload.case) {
+            case 'welcome':
+              setWelcome({
+                id: msg.payload.value.connectionId,
+                version: msg.payload.value.serverVersion,
+              })
+              socket.send(
+                create(ClientMessageSchema, {
+                  payload: { case: 'join', value: create(JoinRequestSchema) },
+                }),
+              )
+              break
+            case 'joinAccepted': {
+              const v = msg.payload.value
+              const info: JoinInfo = {
+                playerId: v.playerId,
+                worldWidth: v.worldWidth,
+                worldHeight: v.worldHeight,
+                tickRate: v.tickRate,
+                playerRadius: v.playerRadius,
+                playerSpeed: v.playerSpeed,
+              }
+              game.onJoin(info)
+              setJoin(info)
+              break
+            }
+            case 'snapshot':
+              game.onSnapshot(msg.payload.value, performance.now())
+              break
+            case 'pong': {
+              // 用本地的單調時鐘計算，不受兩邊時鐘不同步影響。
+              const sample = performance.now() - msg.payload.value.clientTimeMs
+              const s = [...samples.current, sample].slice(-RTT_SAMPLES)
+              samples.current = s
+              setRtt(sample)
+              setRttAvg(s.reduce((a, b) => a + b, 0) / s.length)
+              game.setRtt(sample)
+              break
+            }
           }
-        }
+        },
       },
+      { simulatedLagMs },
+    )
+    const detachSender = game.attachSender((seq, x, y) => {
+      socket.send(
+        create(ClientMessageSchema, {
+          payload: {
+            case: 'input',
+            value: create(PlayerInputSchema, { seq, moveX: x, moveY: y }),
+          },
+        }),
+      )
     })
-    socketRef.current = socket
     socket.connect()
 
     const ping = setInterval(() => {
@@ -227,10 +204,10 @@ export function useGameSocket({
 
     return () => {
       clearInterval(ping)
+      detachSender()
       socket.close()
-      socketRef.current = null
     }
-  }, [url, recordLog, sendInput])
+  }, [url, recordLog, simulatedLagMs, game])
 
   return {
     status,
@@ -241,8 +218,7 @@ export function useGameSocket({
     rtt,
     rttAvg,
     join,
-    snapshotRef,
-    setMoveInput,
+    game,
     log,
     clearLog: () => setLog([]),
   }

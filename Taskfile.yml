@@ -59,12 +59,20 @@ tasks:
     desc: 執行所有測試
     cmds:
       - task: test:server
+      - task: test:web
 
   test:server:
     desc: 執行後端測試
     dir: server
     cmds:
       - go test ./...
+
+  test:web:
+    desc: 執行前端單元測試（vitest）
+    dir: web
+    deps: [web:install]
+    cmds:
+      - npm test
 
   test:race:
     desc: 用 Linux 容器跑 go test -race（Windows 本機沒有 cgo/gcc，與 CI 相同條件）

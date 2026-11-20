@@ -42,7 +42,7 @@ AIGaming/
 ├── web/                    # React 前端（nginx.conf 給 docker 用）
 │   └── src/
 │       ├── net/            #   GameSocket（連線、重連）、useGameSocket hook
-│       ├── game/           #   GameCanvas（Canvas 繪製）、鍵盤輸入
+│       ├── game/           #   GameClient（預測 / 插值）、GameCanvas（相機、HUD）、鍵盤輸入
 │       ├── components/     #   UI 元件（連線狀態、debug 面板…）
 │       └── gen/            #   ⚙ protobuf-es 產生的程式碼
 ├── compose.yaml        # docker compose
@@ -85,7 +85,8 @@ task down   # 停止
 |---|---|
 | `task dev` | 同時啟動前後端（開發模式） |
 | `task dev:server` / `task dev:web` | 只啟動其中一邊 |
-| `task check` | lint + format 檢查 + test + build，開 PR 前必跑 |
+| `task check` | lint + format 檢查 + test（Go + vitest）+ build，開 PR 前必跑 |
+| `task test:race` | 用 Linux 容器跑 `go test -race`（Windows 本機沒有 cgo） |
 | `task format` | 自動排版（gofmt、prettier） |
 | `task up` / `task down` / `task logs` | Docker Compose |
 
@@ -116,8 +117,8 @@ task down   # 停止
   │ ◀──────── Welcome{connection_id} ─── │
   │ ── JoinRequest ────────────────────▶ │
   │ ◀── JoinAccepted{player_id, world} ─ │  保證在第一個含自己的快照之前
-  │ ◀──── WorldSnapshot{tick, players} ─ │  每個 tick（20Hz）
-  │ ── PlayerInput{seq, move_x, move_y} ▶ │  只在方向改變時送
+  │ ◀── WorldSnapshot{tick, players[]} ─ │  每個 tick（20Hz），含每人的 last_input_seq
+  │ ── PlayerInput{seq, move_x, move_y} ▶ │  移動時每個 tick 一筆（= 移動 1/20 秒），不動時不送
   │ ── Ping{client_time_ms} ───────────▶ │  每秒一次
   │ ◀──── Pong{client_time_ms, server} ─ │  RTT = now - client_time_ms
   │ ◀──────────── (WebSocket ping) ───── │  每 54 秒心跳，60 秒沒回應就斷線
@@ -146,7 +147,27 @@ task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
 - `server/internal/game/world.go`：純遊戲規則（移動、輸入正規化、邊界），不碰網路、不開 goroutine，單元測試直接呼叫。
 - `server/internal/game/loop.go`：其他 goroutine 只把「要做的事」包成閉包送進 channel，World 永遠只有一個擁有者，不需要鎖。
 - 客戶端只送「想往哪走」；位置一律由伺服器算，長度超過 1 的輸入會被正規化（斜走不會比較快）、NaN 會被丟棄。
-- 前端 Canvas 由 `requestAnimationFrame` 繪製，快照放在 ref 裡，不觸發 React 重新渲染。目前直接畫最新快照，所以移動有 20Hz 的頓感 —— 下一張卡片用插值解決。
+- **移動由輸入驅動**：一筆 `PlayerInput` = 往該方向移動一個 tick（`MoveStep`），伺服器收到就套用；`Step` 只推進 tick 並補充每人的「輸入時間預算」。每筆輸入扣 1/20 秒預算、上限 0.25 秒，所以網路抖動造成的短暫爆量能被吸收，但長期每秒最多只能移動 1 秒的量（多送輸入無法加速）。
+
+## 客戶端預測、校正與插值
+
+20Hz 的快照如果直接畫，畫面會一格一格跳；如果等伺服器回應才移動，延遲 150ms 時按鍵會「黏黏的」。所以前端分兩種情況處理（`web/src/game/`）：
+
+| 對象 | 做法 | 檔案 |
+|---|---|---|
+| **自己** | **預測**：每個輸入 tick 產生一筆輸入，立刻用與伺服器相同的 `moveStep` 在本地套用，並記在 pending；**校正**：快照回來時從伺服器位置重播 `seq > last_input_seq` 的輸入。規則一致，所以正常情況校正量是 0 | `prediction.ts`、`sim.ts` |
+| **其他人** | **插值**：快照放進緩衝，畫「伺服器時間 − 100ms」的位置，在前後兩個快照間線性插值；看到的別人比實際晚 ~100ms，但完全平順 | `interpolation.ts` |
+
+- `GameClient.ts` 把兩者串起來：每幀 `update(now)` 依累積時間產生輸入（從靜止起步時立刻產生一筆，不等下一個 tick），`view(now)` 回傳要畫的位置；自己的位置在兩個輸入 tick 之間平滑、被校正時誤差在 ~80ms 內滑過去，而不是瞬移。
+- 伺服器時間用「快照 tick × 50ms」，並以最近 2 秒內延遲最小的快照估計時鐘差（`ServerClock`）。
+- 相機以自己為中心，世界 3000×2000、畫面 960×640，只畫看得到的格線。
+- `sim.ts` 的 `moveStep` / `normalizeInput` 必須與 `server/internal/game/world.go` 的 `MoveStep` / `NormalizeInput` 一致，否則預測會一直被校正（HUD 的 correction 會變黃）。
+
+### 除錯工具
+
+- **延遲模擬**：網址加 `?lag=150`，送出與收到的訊息各延遲 75ms。Chrome DevTools 的網路節流不會套用到 WebSocket，所以用這個測試預測與插值。
+- **HUD**（畫面左上）：FPS、tick、RTT、players、pending inputs（還沒被伺服器確認的輸入數 ≈ RTT / 50ms）、correction（最近一次校正距離）、自己的座標。
+- **DevTools console**（只在開發模式）：`__aigaming.game.view(performance.now())` 查看目前的預測 / 插值狀態。
 
 ## 後端日誌
 
@@ -186,7 +207,7 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 - [x] GitHub Actions CI（server / web / proto / docker 四個 check）
 - [x] Proto + 程式碼產生 + WebSocket 連線、Ping/Pong 延遲顯示
 - [x] 遊戲迴圈 + 玩家移動（輸入 → tick → 快照）
-- [ ] 客戶端插值與相機跟隨
+- [x] 客戶端插值、預測 / 校正與相機跟隨
 - [ ] 敵人生成、追蹤、碰撞扣血、Game Over
 - [ ] 自動攻擊武器、敵人死亡、經驗寶石
 - [ ] 升級系統（三選一）

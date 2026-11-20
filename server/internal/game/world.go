@@ -29,23 +29,30 @@ type WorldConfig struct {
 	Width, Height float64 // 世界大小
 	PlayerSpeed   float64 // 角色移動速度（單位 / 秒）
 	PlayerRadius  float64 // 角色半徑，角色中心離邊界至少這麼遠
+	// InputDt 是一筆 PlayerInput 代表的移動時間（秒），等於 1 / tick rate。
+	InputDt float64
+	// MaxInputBudget 是可累積的輸入時間上限（秒）。
+	// 每個 tick 預算增加 dt，每套用一筆輸入扣 InputDt；網路抖動時短暫爆量的輸入可以被吸收，
+	// 但長期而言每秒最多只能移動 1 秒的量（客戶端無法靠多送輸入加速）。
+	MaxInputBudget float64
 }
 
-// DefaultWorldConfig 是預設的世界參數。
-// 目前還沒有相機跟隨（#5），所以世界大小剛好是一個畫面。
+// DefaultWorldConfig 是預設的世界參數：世界比畫面（960×640）大，相機跟隨玩家。
 var DefaultWorldConfig = WorldConfig{
-	Width:        960,
-	Height:       640,
-	PlayerSpeed:  220,
-	PlayerRadius: 16,
+	Width:          3000,
+	Height:         2000,
+	PlayerSpeed:    220,
+	PlayerRadius:   16,
+	InputDt:        1.0 / 20,
+	MaxInputBudget: 0.25,
 }
 
 // Player 是一個角色。
 type Player struct {
 	ID           PlayerID
 	Pos          Vec2
-	Move         Vec2   // 目前的移動方向（已正規化，長度 ≤ 1）
-	LastInputSeq uint32 // 最後套用的輸入序號
+	LastInputSeq uint32  // 最後套用的輸入序號
+	InputBudget  float64 // 還能套用多少秒的輸入
 }
 
 // World 是整個遊戲世界的狀態。不是並行安全的：只能由一個 goroutine（Loop）存取。
@@ -71,7 +78,11 @@ func (w *World) Tick() uint32 { return w.tick }
 func (w *World) AddPlayer() PlayerID {
 	id := w.nextID
 	w.nextID++
-	w.players[id] = &Player{ID: id, Pos: Vec2{w.cfg.Width / 2, w.cfg.Height / 2}}
+	w.players[id] = &Player{
+		ID:          id,
+		Pos:         Vec2{w.cfg.Width / 2, w.cfg.Height / 2},
+		InputBudget: w.cfg.MaxInputBudget,
+	}
 	return id
 }
 
@@ -81,22 +92,40 @@ func (w *World) RemovePlayer(id PlayerID) { delete(w.players, id) }
 // Player 回傳角色（唯讀用途），不存在時回傳 nil。
 func (w *World) Player(id PlayerID) *Player { return w.players[id] }
 
-// SetInput 設定角色的移動方向。輸入會先經過 NormalizeInput。
-// 序號比目前舊的輸入會被忽略（雖然 WebSocket 保證順序，這裡仍防禦性檢查）。
-func (w *World) SetInput(id PlayerID, seq uint32, x, y float64) {
+// InputResult 是 ApplyInput 的結果，方便呼叫端記錄與測試。
+type InputResult int
+
+const (
+	InputApplied    InputResult = iota
+	InputUnknown                // 角色不存在
+	InputStale                  // 序號不比上一筆新
+	InputOverBudget             // 超出時間預算（送太快）
+)
+
+// ApplyInput 讓角色往 (x, y) 方向移動一個 InputDt。
+// 方向先經過 NormalizeInput；序號必須遞增；每筆輸入消耗 InputDt 的時間預算。
+func (w *World) ApplyInput(id PlayerID, seq uint32, x, y float64) InputResult {
 	p := w.players[id]
-	if p == nil || (seq != 0 && seq < p.LastInputSeq) {
-		return
+	switch {
+	case p == nil:
+		return InputUnknown
+	case seq <= p.LastInputSeq:
+		return InputStale
+	case p.InputBudget+1e-9 < w.cfg.InputDt:
+		return InputOverBudget
 	}
-	p.Move = NormalizeInput(x, y)
+	p.InputBudget -= w.cfg.InputDt
 	p.LastInputSeq = seq
+	p.Pos = MoveStep(p.Pos, NormalizeInput(x, y), w.cfg)
+	return InputApplied
 }
 
-// Step 推進模擬 dt 秒。
+// Step 推進模擬 dt 秒：tick 加一，並補充每個角色的輸入預算。
+// 移動完全由 ApplyInput 驅動，所以客戶端可以用同樣的算法預測自己的位置。
 func (w *World) Step(dt float64) {
 	w.tick++
 	for _, p := range w.players {
-		p.Pos = w.clamp(p.Pos.Add(p.Move.Scale(w.cfg.PlayerSpeed * dt)))
+		p.InputBudget = math.Min(p.InputBudget+dt, w.cfg.MaxInputBudget)
 	}
 }
 
@@ -110,12 +139,14 @@ func (w *World) Players() []Player {
 	return out
 }
 
-// clamp 讓角色整個身體都留在世界內。
-func (w *World) clamp(p Vec2) Vec2 {
-	r := w.cfg.PlayerRadius
+// MoveStep 是一筆輸入的移動規則：沿 dir 走 speed × InputDt，再把整個身體夾回世界內。
+// 前端 web/src/game/sim.ts 的 moveStep 必須與此一致，否則客戶端預測會一直被校正。
+func MoveStep(pos, dir Vec2, cfg WorldConfig) Vec2 {
+	next := pos.Add(dir.Scale(cfg.PlayerSpeed * cfg.InputDt))
+	r := cfg.PlayerRadius
 	return Vec2{
-		X: math.Min(math.Max(p.X, r), w.cfg.Width-r),
-		Y: math.Min(math.Max(p.Y, r), w.cfg.Height-r),
+		X: math.Min(math.Max(next.X, r), cfg.Width-r),
+		Y: math.Min(math.Max(next.Y, r), cfg.Height-r),
 	}
 }
 

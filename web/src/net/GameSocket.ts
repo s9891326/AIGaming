@@ -19,6 +19,17 @@ export interface GameSocketOptions {
   minReconnectDelayMs?: number
   /** 重連等待時間上限（毫秒）。 */
   maxReconnectDelayMs?: number
+  /**
+   * 開發用：模擬網路往返延遲（毫秒）。送出與收到的訊息各延遲一半。
+   * Chrome DevTools 的網路節流不會套用到 WebSocket，所以用這個測試預測與插值。
+   */
+  simulatedLagMs?: number
+}
+
+/** 從網址讀取 ?lag=150 之類的延遲模擬設定。 */
+export function lagFromLocation(): number {
+  const lag = Number(new URLSearchParams(location.search).get('lag'))
+  return Number.isFinite(lag) && lag > 0 ? lag : 0
 }
 
 /** 依目前頁面推算 WebSocket 位址；開發時由 Vite、部署時由 nginx 代理到後端。 */
@@ -44,12 +55,21 @@ export class GameSocket {
   private readonly maxDelay: number
   private readonly url: string
   private readonly listener: GameSocketListener
+  /** 單向延遲（毫秒）= 模擬往返延遲的一半。 */
+  private readonly oneWayLag: number
 
   constructor(url: string, listener: GameSocketListener, opts: GameSocketOptions = {}) {
     this.url = url
     this.listener = listener
     this.minDelay = opts.minReconnectDelayMs ?? 500
     this.maxDelay = opts.maxReconnectDelayMs ?? 5000
+    this.oneWayLag = (opts.simulatedLagMs ?? 0) / 2
+  }
+
+  /** 有模擬延遲時晚一點執行；相同延遲的 setTimeout 依序觸發，所以訊息順序不變。 */
+  private delayed(fn: () => void): void {
+    if (this.oneWayLag > 0) setTimeout(fn, this.oneWayLag)
+    else fn()
   }
 
   get currentStatus(): ConnectionStatus {
@@ -75,10 +95,13 @@ export class GameSocket {
 
   /** 送出訊息；尚未連線時丟棄並回傳 false（不排隊，避免重連後送出過期的輸入）。 */
   send(msg: ClientMessage): boolean {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false
+    const ws = this.ws
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false
     const bytes = toBinary(ClientMessageSchema, msg)
-    this.ws.send(bytes)
     this.listener.onSent?.(msg, bytes.byteLength)
+    this.delayed(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(bytes)
+    })
     return true
   }
 
@@ -102,12 +125,16 @@ export class GameSocket {
         console.warn('[ws] ignoring non-binary message')
         return
       }
-      try {
-        const msg = fromBinary(ServerMessageSchema, new Uint8Array(ev.data))
-        this.listener.onMessage?.(msg, ev.data.byteLength)
-      } catch (err) {
-        console.warn('[ws] failed to decode message', err)
-      }
+      const data = ev.data
+      this.delayed(() => {
+        if (this.ws !== ws) return
+        try {
+          const msg = fromBinary(ServerMessageSchema, new Uint8Array(data))
+          this.listener.onMessage?.(msg, data.byteLength)
+        } catch (err) {
+          console.warn('[ws] failed to decode message', err)
+        }
+      })
     }
 
     // 連線失敗時瀏覽器會先觸發 error 再觸發 close，重連統一在 close 處理。
