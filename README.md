@@ -35,12 +35,14 @@ AIGaming/
 │   ├── internal/
 │   │   ├── httpserver/     #   Gin 路由、中介層
 │   │   ├── ws/             #   WebSocket：升級、讀寫 goroutine、心跳、連線管理
-│   │   ├── session/        #   每種訊息怎麼回應（目前：Welcome、Ping/Pong）
+│   │   ├── session/        #   訊息分派：Welcome、Ping/Pong、Join/Input → 遊戲迴圈
+│   │   ├── game/           #   遊戲模擬：World（純規則）、Loop（20Hz tick + 廣播）
 │   │   └── pb/             #   ⚙ protoc-gen-go 產生的程式碼
 │   └── pkg/logger/         #   可重用的小套件：彩色 slog logger
 ├── web/                    # React 前端（nginx.conf 給 docker 用）
 │   └── src/
 │       ├── net/            #   GameSocket（連線、重連）、useGameSocket hook
+│       ├── game/           #   GameCanvas（Canvas 繪製）、鍵盤輸入
 │       ├── components/     #   UI 元件（連線狀態、debug 面板…）
 │       └── gen/            #   ⚙ protobuf-es 產生的程式碼
 ├── compose.yaml        # docker compose
@@ -104,14 +106,18 @@ task down   # 停止
 
 | 方向 | 信封 | 目前的內容（oneof） |
 |---|---|---|
-| 客戶端 → 伺服器 | `ClientMessage` | `Ping` |
-| 伺服器 → 客戶端 | `ServerMessage` | `Welcome`、`Pong` |
+| 客戶端 → 伺服器 | `ClientMessage` | `Ping`、`JoinRequest`、`PlayerInput` |
+| 伺服器 → 客戶端 | `ServerMessage` | `Welcome`、`Pong`、`JoinAccepted`、`WorldSnapshot` |
 
 ```
 瀏覽器                                   Go server
   │ ── HTTP GET /ws (Upgrade) ─────────▶ │  Origin 必須與 Host 同源
   │ ◀──────── 101 Switching Protocols ── │
   │ ◀──────── Welcome{connection_id} ─── │
+  │ ── JoinRequest ────────────────────▶ │
+  │ ◀── JoinAccepted{player_id, world} ─ │  保證在第一個含自己的快照之前
+  │ ◀──── WorldSnapshot{tick, players} ─ │  每個 tick（20Hz）
+  │ ── PlayerInput{seq, move_x, move_y} ▶ │  只在方向改變時送
   │ ── Ping{client_time_ms} ───────────▶ │  每秒一次
   │ ◀──── Pong{client_time_ms, server} ─ │  RTT = now - client_time_ms
   │ ◀──────────── (WebSocket ping) ───── │  每 54 秒心跳，60 秒沒回應就斷線
@@ -128,6 +134,19 @@ task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
 ```
 
 產生的程式碼要一起提交，CI 的 `proto` check 會確認沒有漏掉。
+
+## 遊戲迴圈（伺服器權威）
+
+```
+連線 goroutine（每條一個）            Loop goroutine（唯一擁有 World）
+  Join / Leave / Input ──閉包──▶ cmds channel ──▶ 立即執行（改 World）
+                                       ticker 20Hz ──▶ World.Step(0.05s) ──▶ 廣播 WorldSnapshot
+```
+
+- `server/internal/game/world.go`：純遊戲規則（移動、輸入正規化、邊界），不碰網路、不開 goroutine，單元測試直接呼叫。
+- `server/internal/game/loop.go`：其他 goroutine 只把「要做的事」包成閉包送進 channel，World 永遠只有一個擁有者，不需要鎖。
+- 客戶端只送「想往哪走」；位置一律由伺服器算，長度超過 1 的輸入會被正規化（斜走不會比較快）、NaN 會被丟棄。
+- 前端 Canvas 由 `requestAnimationFrame` 繪製，快照放在 ref 裡，不觸發 React 重新渲染。目前直接畫最新快照，所以移動有 20Hz 的頓感 —— 下一張卡片用插值解決。
 
 ## 後端日誌
 
@@ -166,7 +185,7 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 - [x] 專案骨架與開發環境（Gin、React、logger、Task、VS Code、Docker Compose）
 - [x] GitHub Actions CI（server / web / proto / docker 四個 check）
 - [x] Proto + 程式碼產生 + WebSocket 連線、Ping/Pong 延遲顯示
-- [ ] 遊戲迴圈 + 玩家移動（輸入 → tick → 快照）
+- [x] 遊戲迴圈 + 玩家移動（輸入 → tick → 快照）
 - [ ] 客戶端插值與相機跟隨
 - [ ] 敵人生成、追蹤、碰撞扣血、Game Over
 - [ ] 自動攻擊武器、敵人死亡、經驗寶石
