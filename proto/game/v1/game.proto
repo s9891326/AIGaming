@@ -11,6 +11,8 @@ option go_package = "aigaming/server/internal/pb/game/v1;gamev1";
 message ClientMessage {
   oneof payload {
     Ping ping = 1;
+    JoinRequest join = 2;
+    PlayerInput input = 3;
   }
 }
 
@@ -19,6 +21,8 @@ message ServerMessage {
   oneof payload {
     Welcome welcome = 1;
     Pong pong = 2;
+    JoinAccepted join_accepted = 3;
+    WorldSnapshot snapshot = 4;
   }
 }
 
@@ -43,4 +47,50 @@ message Pong {
   double client_time_ms = 1;
   // 伺服器處理時的 Unix 時間（毫秒），之後可用來估算時鐘偏移。
   double server_time_ms = 2;
+}
+
+// JoinRequest 請求加入遊戲。每條連線最多只會有一個角色，重複送出會被忽略。
+message JoinRequest {}
+
+// JoinAccepted 回應 JoinRequest，告訴客戶端自己的角色與世界的基本參數。
+// 伺服器保證在任何包含這個角色的 WorldSnapshot 之前送出。
+message JoinAccepted {
+  // 自己的角色 ID，用來在快照中找出自己。
+  uint32 player_id = 1;
+  // 世界大小（遊戲單位），座標範圍為 [0, width] × [0, height]。
+  float world_width = 2;
+  float world_height = 3;
+  // 伺服器每秒模擬幾次（tick）。
+  uint32 tick_rate = 4;
+  // 角色半徑（遊戲單位），用於繪製。
+  float player_radius = 5;
+}
+
+// PlayerInput 是玩家目前想移動的方向，只在方向改變時送出。
+// 伺服器會持續套用最後一次收到的輸入，直到下一次改變。
+message PlayerInput {
+  // 遞增的輸入序號，之後的客戶端預測 / 校正會用到。
+  uint32 seq = 1;
+  // 移動方向，各分量在 [-1, 1]；長度超過 1 時伺服器會正規化（斜向不會比較快）。
+  float move_x = 2;
+  float move_y = 3;
+}
+
+// WorldSnapshot 是伺服器每個 tick 廣播的世界狀態。
+message WorldSnapshot {
+  // 第幾個 tick（從伺服器啟動起算）。
+  uint32 tick = 1;
+  // 產生快照時伺服器的 Unix 時間（毫秒）。
+  double server_time_ms = 2;
+  repeated PlayerState players = 3;
+}
+
+// PlayerState 是快照中單一角色的狀態。
+message PlayerState {
+  uint32 id = 1;
+  // 角色中心座標（遊戲單位）。
+  float x = 2;
+  float y = 3;
+  // 最後一個已套用的 PlayerInput.seq。
+  uint32 last_input_seq = 4;
 }

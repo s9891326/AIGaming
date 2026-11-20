@@ -31,6 +31,8 @@ type ClientMessage struct {
 	// Types that are valid to be assigned to Payload:
 	//
 	//	*ClientMessage_Ping
+	//	*ClientMessage_Join
+	//	*ClientMessage_Input
 	Payload       isClientMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -82,6 +84,24 @@ func (x *ClientMessage) GetPing() *Ping {
 	return nil
 }
 
+func (x *ClientMessage) GetJoin() *JoinRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientMessage_Join); ok {
+			return x.Join
+		}
+	}
+	return nil
+}
+
+func (x *ClientMessage) GetInput() *PlayerInput {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientMessage_Input); ok {
+			return x.Input
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Payload interface {
 	isClientMessage_Payload()
 }
@@ -90,7 +110,19 @@ type ClientMessage_Ping struct {
 	Ping *Ping `protobuf:"bytes,1,opt,name=ping,proto3,oneof"`
 }
 
+type ClientMessage_Join struct {
+	Join *JoinRequest `protobuf:"bytes,2,opt,name=join,proto3,oneof"`
+}
+
+type ClientMessage_Input struct {
+	Input *PlayerInput `protobuf:"bytes,3,opt,name=input,proto3,oneof"`
+}
+
 func (*ClientMessage_Ping) isClientMessage_Payload() {}
+
+func (*ClientMessage_Join) isClientMessage_Payload() {}
+
+func (*ClientMessage_Input) isClientMessage_Payload() {}
 
 // ServerMessage 是伺服器送給客戶端的信封。
 type ServerMessage struct {
@@ -99,6 +131,8 @@ type ServerMessage struct {
 	//
 	//	*ServerMessage_Welcome
 	//	*ServerMessage_Pong
+	//	*ServerMessage_JoinAccepted
+	//	*ServerMessage_Snapshot
 	Payload       isServerMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -159,6 +193,24 @@ func (x *ServerMessage) GetPong() *Pong {
 	return nil
 }
 
+func (x *ServerMessage) GetJoinAccepted() *JoinAccepted {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_JoinAccepted); ok {
+			return x.JoinAccepted
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetSnapshot() *WorldSnapshot {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_Snapshot); ok {
+			return x.Snapshot
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Payload interface {
 	isServerMessage_Payload()
 }
@@ -171,9 +223,21 @@ type ServerMessage_Pong struct {
 	Pong *Pong `protobuf:"bytes,2,opt,name=pong,proto3,oneof"`
 }
 
+type ServerMessage_JoinAccepted struct {
+	JoinAccepted *JoinAccepted `protobuf:"bytes,3,opt,name=join_accepted,json=joinAccepted,proto3,oneof"`
+}
+
+type ServerMessage_Snapshot struct {
+	Snapshot *WorldSnapshot `protobuf:"bytes,4,opt,name=snapshot,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Payload() {}
 
 func (*ServerMessage_Pong) isServerMessage_Payload() {}
+
+func (*ServerMessage_JoinAccepted) isServerMessage_Payload() {}
+
+func (*ServerMessage_Snapshot) isServerMessage_Payload() {}
 
 // Welcome 在連線建立後由伺服器立即送出。
 type Welcome struct {
@@ -332,17 +396,338 @@ func (x *Pong) GetServerTimeMs() float64 {
 	return 0
 }
 
+// JoinRequest 請求加入遊戲。每條連線最多只會有一個角色，重複送出會被忽略。
+type JoinRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JoinRequest) Reset() {
+	*x = JoinRequest{}
+	mi := &file_game_v1_game_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JoinRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinRequest) ProtoMessage() {}
+
+func (x *JoinRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinRequest.ProtoReflect.Descriptor instead.
+func (*JoinRequest) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{5}
+}
+
+// JoinAccepted 回應 JoinRequest，告訴客戶端自己的角色與世界的基本參數。
+// 伺服器保證在任何包含這個角色的 WorldSnapshot 之前送出。
+type JoinAccepted struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 自己的角色 ID，用來在快照中找出自己。
+	PlayerId uint32 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// 世界大小（遊戲單位），座標範圍為 [0, width] × [0, height]。
+	WorldWidth  float32 `protobuf:"fixed32,2,opt,name=world_width,json=worldWidth,proto3" json:"world_width,omitempty"`
+	WorldHeight float32 `protobuf:"fixed32,3,opt,name=world_height,json=worldHeight,proto3" json:"world_height,omitempty"`
+	// 伺服器每秒模擬幾次（tick）。
+	TickRate uint32 `protobuf:"varint,4,opt,name=tick_rate,json=tickRate,proto3" json:"tick_rate,omitempty"`
+	// 角色半徑（遊戲單位），用於繪製。
+	PlayerRadius  float32 `protobuf:"fixed32,5,opt,name=player_radius,json=playerRadius,proto3" json:"player_radius,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JoinAccepted) Reset() {
+	*x = JoinAccepted{}
+	mi := &file_game_v1_game_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JoinAccepted) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinAccepted) ProtoMessage() {}
+
+func (x *JoinAccepted) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinAccepted.ProtoReflect.Descriptor instead.
+func (*JoinAccepted) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *JoinAccepted) GetPlayerId() uint32 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *JoinAccepted) GetWorldWidth() float32 {
+	if x != nil {
+		return x.WorldWidth
+	}
+	return 0
+}
+
+func (x *JoinAccepted) GetWorldHeight() float32 {
+	if x != nil {
+		return x.WorldHeight
+	}
+	return 0
+}
+
+func (x *JoinAccepted) GetTickRate() uint32 {
+	if x != nil {
+		return x.TickRate
+	}
+	return 0
+}
+
+func (x *JoinAccepted) GetPlayerRadius() float32 {
+	if x != nil {
+		return x.PlayerRadius
+	}
+	return 0
+}
+
+// PlayerInput 是玩家目前想移動的方向，只在方向改變時送出。
+// 伺服器會持續套用最後一次收到的輸入，直到下一次改變。
+type PlayerInput struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 遞增的輸入序號，之後的客戶端預測 / 校正會用到。
+	Seq uint32 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	// 移動方向，各分量在 [-1, 1]；長度超過 1 時伺服器會正規化（斜向不會比較快）。
+	MoveX         float32 `protobuf:"fixed32,2,opt,name=move_x,json=moveX,proto3" json:"move_x,omitempty"`
+	MoveY         float32 `protobuf:"fixed32,3,opt,name=move_y,json=moveY,proto3" json:"move_y,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerInput) Reset() {
+	*x = PlayerInput{}
+	mi := &file_game_v1_game_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerInput) ProtoMessage() {}
+
+func (x *PlayerInput) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerInput.ProtoReflect.Descriptor instead.
+func (*PlayerInput) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PlayerInput) GetSeq() uint32 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *PlayerInput) GetMoveX() float32 {
+	if x != nil {
+		return x.MoveX
+	}
+	return 0
+}
+
+func (x *PlayerInput) GetMoveY() float32 {
+	if x != nil {
+		return x.MoveY
+	}
+	return 0
+}
+
+// WorldSnapshot 是伺服器每個 tick 廣播的世界狀態。
+type WorldSnapshot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 第幾個 tick（從伺服器啟動起算）。
+	Tick uint32 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	// 產生快照時伺服器的 Unix 時間（毫秒）。
+	ServerTimeMs  float64        `protobuf:"fixed64,2,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	Players       []*PlayerState `protobuf:"bytes,3,rep,name=players,proto3" json:"players,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorldSnapshot) Reset() {
+	*x = WorldSnapshot{}
+	mi := &file_game_v1_game_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorldSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorldSnapshot) ProtoMessage() {}
+
+func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorldSnapshot.ProtoReflect.Descriptor instead.
+func (*WorldSnapshot) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *WorldSnapshot) GetTick() uint32 {
+	if x != nil {
+		return x.Tick
+	}
+	return 0
+}
+
+func (x *WorldSnapshot) GetServerTimeMs() float64 {
+	if x != nil {
+		return x.ServerTimeMs
+	}
+	return 0
+}
+
+func (x *WorldSnapshot) GetPlayers() []*PlayerState {
+	if x != nil {
+		return x.Players
+	}
+	return nil
+}
+
+// PlayerState 是快照中單一角色的狀態。
+type PlayerState struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 角色中心座標（遊戲單位）。
+	X float32 `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
+	Y float32 `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
+	// 最後一個已套用的 PlayerInput.seq。
+	LastInputSeq  uint32 `protobuf:"varint,4,opt,name=last_input_seq,json=lastInputSeq,proto3" json:"last_input_seq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerState) Reset() {
+	*x = PlayerState{}
+	mi := &file_game_v1_game_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerState) ProtoMessage() {}
+
+func (x *PlayerState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerState.ProtoReflect.Descriptor instead.
+func (*PlayerState) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *PlayerState) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *PlayerState) GetX() float32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *PlayerState) GetY() float32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *PlayerState) GetLastInputSeq() uint32 {
+	if x != nil {
+		return x.LastInputSeq
+	}
+	return 0
+}
+
 var File_game_v1_game_proto protoreflect.FileDescriptor
 
 const file_game_v1_game_proto_rawDesc = "" +
 	"\n" +
-	"\x12game/v1/game.proto\x12\agame.v1\"?\n" +
+	"\x12game/v1/game.proto\x12\agame.v1\"\x99\x01\n" +
 	"\rClientMessage\x12#\n" +
-	"\x04ping\x18\x01 \x01(\v2\r.game.v1.PingH\x00R\x04pingB\t\n" +
-	"\apayload\"m\n" +
+	"\x04ping\x18\x01 \x01(\v2\r.game.v1.PingH\x00R\x04ping\x12*\n" +
+	"\x04join\x18\x02 \x01(\v2\x14.game.v1.JoinRequestH\x00R\x04join\x12,\n" +
+	"\x05input\x18\x03 \x01(\v2\x14.game.v1.PlayerInputH\x00R\x05inputB\t\n" +
+	"\apayload\"\xe1\x01\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.game.v1.WelcomeH\x00R\awelcome\x12#\n" +
-	"\x04pong\x18\x02 \x01(\v2\r.game.v1.PongH\x00R\x04pongB\t\n" +
+	"\x04pong\x18\x02 \x01(\v2\r.game.v1.PongH\x00R\x04pong\x12<\n" +
+	"\rjoin_accepted\x18\x03 \x01(\v2\x15.game.v1.JoinAcceptedH\x00R\fjoinAccepted\x124\n" +
+	"\bsnapshot\x18\x04 \x01(\v2\x16.game.v1.WorldSnapshotH\x00R\bsnapshotB\t\n" +
 	"\apayload\"U\n" +
 	"\aWelcome\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12%\n" +
@@ -351,7 +736,28 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\x0eclient_time_ms\x18\x01 \x01(\x01R\fclientTimeMs\"R\n" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_ms\x18\x01 \x01(\x01R\fclientTimeMs\x12$\n" +
-	"\x0eserver_time_ms\x18\x02 \x01(\x01R\fserverTimeMsB,Z*aigaming/server/internal/pb/game/v1;gamev1b\x06proto3"
+	"\x0eserver_time_ms\x18\x02 \x01(\x01R\fserverTimeMs\"\r\n" +
+	"\vJoinRequest\"\xb1\x01\n" +
+	"\fJoinAccepted\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x1f\n" +
+	"\vworld_width\x18\x02 \x01(\x02R\n" +
+	"worldWidth\x12!\n" +
+	"\fworld_height\x18\x03 \x01(\x02R\vworldHeight\x12\x1b\n" +
+	"\ttick_rate\x18\x04 \x01(\rR\btickRate\x12#\n" +
+	"\rplayer_radius\x18\x05 \x01(\x02R\fplayerRadius\"M\n" +
+	"\vPlayerInput\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\rR\x03seq\x12\x15\n" +
+	"\x06move_x\x18\x02 \x01(\x02R\x05moveX\x12\x15\n" +
+	"\x06move_y\x18\x03 \x01(\x02R\x05moveY\"y\n" +
+	"\rWorldSnapshot\x12\x12\n" +
+	"\x04tick\x18\x01 \x01(\rR\x04tick\x12$\n" +
+	"\x0eserver_time_ms\x18\x02 \x01(\x01R\fserverTimeMs\x12.\n" +
+	"\aplayers\x18\x03 \x03(\v2\x14.game.v1.PlayerStateR\aplayers\"_\n" +
+	"\vPlayerState\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
+	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
+	"\x01y\x18\x03 \x01(\x02R\x01y\x12$\n" +
+	"\x0elast_input_seq\x18\x04 \x01(\rR\flastInputSeqB,Z*aigaming/server/internal/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_game_proto_rawDescOnce sync.Once
@@ -365,23 +771,33 @@ func file_game_v1_game_proto_rawDescGZIP() []byte {
 	return file_game_v1_game_proto_rawDescData
 }
 
-var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_game_v1_game_proto_goTypes = []any{
 	(*ClientMessage)(nil), // 0: game.v1.ClientMessage
 	(*ServerMessage)(nil), // 1: game.v1.ServerMessage
 	(*Welcome)(nil),       // 2: game.v1.Welcome
 	(*Ping)(nil),          // 3: game.v1.Ping
 	(*Pong)(nil),          // 4: game.v1.Pong
+	(*JoinRequest)(nil),   // 5: game.v1.JoinRequest
+	(*JoinAccepted)(nil),  // 6: game.v1.JoinAccepted
+	(*PlayerInput)(nil),   // 7: game.v1.PlayerInput
+	(*WorldSnapshot)(nil), // 8: game.v1.WorldSnapshot
+	(*PlayerState)(nil),   // 9: game.v1.PlayerState
 }
 var file_game_v1_game_proto_depIdxs = []int32{
 	3, // 0: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
-	2, // 1: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
-	4, // 2: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	5, // 1: game.v1.ClientMessage.join:type_name -> game.v1.JoinRequest
+	7, // 2: game.v1.ClientMessage.input:type_name -> game.v1.PlayerInput
+	2, // 3: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
+	4, // 4: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
+	6, // 5: game.v1.ServerMessage.join_accepted:type_name -> game.v1.JoinAccepted
+	8, // 6: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
+	9, // 7: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_game_proto_init() }
@@ -391,10 +807,14 @@ func file_game_v1_game_proto_init() {
 	}
 	file_game_v1_game_proto_msgTypes[0].OneofWrappers = []any{
 		(*ClientMessage_Ping)(nil),
+		(*ClientMessage_Join)(nil),
+		(*ClientMessage_Input)(nil),
 	}
 	file_game_v1_game_proto_msgTypes[1].OneofWrappers = []any{
 		(*ServerMessage_Welcome)(nil),
 		(*ServerMessage_Pong)(nil),
+		(*ServerMessage_JoinAccepted)(nil),
+		(*ServerMessage_Snapshot)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -402,7 +822,7 @@ func file_game_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_game_proto_rawDesc), len(file_game_v1_game_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
