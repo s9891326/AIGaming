@@ -136,6 +136,27 @@ task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
 
 產生的程式碼要一起提交，CI 的 `proto` check 會確認沒有漏掉。
 
+### 用 Postman 測試（JSON 除錯模式）
+
+正式前端用 binary protobuf；手動測試時在網址加上 `?format=json`，這條連線就改用 **text frame + JSON**（[protojson](https://protobuf.dev/programming-guides/json/)，欄位名稱是 camelCase，預設值也會輸出）。
+
+1. Postman → **New → WebSocket**，網址填 `ws://localhost:8080/ws?format=json`（直連後端，需 `task dev:server`），按 **Connect**
+   - 也可以走 Vite 代理：`ws://localhost:5173/ws?format=json`
+   - docker 模式（`GIN_MODE=release`）預設**關閉**，會回 400；要開就在 `compose.yaml` 的 server 加 `WS_ALLOW_JSON: "true"`
+   - 若回 403：Postman 帶了不同源的 Origin 標頭，在 Headers 加上 `Origin: http://localhost:8080`
+2. 連上後會收到 `{"welcome":{...}}`，接著依序送出（訊息類型選 **Text** / JSON）：
+
+| 目的 | 送出 | 會收到 |
+|---|---|---|
+| 加入遊戲 | `{"join":{}}` | `{"joinAccepted":{"playerId":1,"worldWidth":3000,...}}`，之後每秒 20 則 `{"snapshot":{...}}` |
+| 往右走一個 tick | `{"input":{"seq":1,"moveX":1,"moveY":0}}` | 下一則 snapshot 中自己的 `x` +11、`lastInputSeq` 變 1 |
+| 往左下走 | `{"input":{"seq":2,"moveX":-1,"moveY":1}}` | `seq` 必須遞增，重複或變小會被忽略 |
+| 量延遲 | `{"ping":{"clientTimeMs":1000}}` | `{"pong":{"clientTimeMs":1000,"serverTimeMs":...}}` |
+
+- 快照每秒 20 則會很快洗版，可以用 Postman 訊息列表的搜尋 / 篩選（例如篩 `joinAccepted`、`pong`）。
+- 送出格式錯誤的 JSON 不會斷線，伺服器日誌會記 `WRN ignoring malformed message`。
+- 一次狂送超過 5 筆 `input`，超出時間預算的會被丟棄（防加速）。
+
 ## 遊戲迴圈（伺服器權威）
 
 ```
@@ -189,6 +210,7 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 | `LOG_LEVEL` | `debug` | `debug` / `info` / `warn` / `error` |
 | `LOG_FORMAT` | `pretty` | `pretty`（給人看）/ `json`（給日誌系統） |
 | `LOG_COLOR` | `auto` | `auto`（終端機才上色）/ `always` / `never`；也遵循 `NO_COLOR` |
+| `WS_ALLOW_JSON` | 非 release 為 `true` | 允許 `/ws?format=json`（Postman 除錯用）；release 模式預設關閉 |
 
 ## 開發流程
 

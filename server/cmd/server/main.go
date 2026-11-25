@@ -58,7 +58,7 @@ func run(cfg config.Config, log *slog.Logger) error {
 	loop := game.NewLoop(log, game.DefaultLoopConfig)
 	go loop.Run(loopCtx)
 
-	wsServer := ws.NewServer(log, session.NewHandler(log, cfg.Version, loop))
+	wsServer := ws.NewServer(log, session.NewHandler(log, cfg.Version, loop), ws.Options{AllowJSON: cfg.WSAllowJSON})
 
 	srv := &http.Server{
 		Addr:              cfg.Addr(),
@@ -73,7 +73,8 @@ func run(cfg config.Config, log *slog.Logger) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("server listening", "addr", cfg.Addr(), "mode", cfg.GinMode, "version", cfg.Version)
+		log.Info("server listening", "addr", cfg.Addr(), "mode", cfg.GinMode, "version", cfg.Version,
+			"ws_json", cfg.WSAllowJSON)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

@@ -46,9 +46,15 @@ type testEnv struct {
 
 func newEnv(t *testing.T) *testEnv {
 	t.Helper()
+	return newEnvWith(t, ws.Options{}, nil)
+}
+
+// newEnvWith 可指定 ws.Options 與遊戲（nil 時忽略 join / input）。
+func newEnvWith(t *testing.T, opts ws.Options, g session.Game) *testEnv {
+	t.Helper()
 	logs := &syncBuffer{}
 	log := logger.New(logger.Options{Writer: logs, Level: slog.LevelDebug, Color: logger.ColorNever})
-	srv := ws.NewServer(log, session.NewHandler(log, "test", nil))
+	srv := ws.NewServer(log, session.NewHandler(log, "test", g), opts)
 	hs := httptest.NewServer(srv)
 	t.Cleanup(func() {
 		srv.Close()
@@ -162,7 +168,7 @@ func TestMalformedMessagesAreIgnored(t *testing.T) {
 		t.Fatal("connection should still answer Ping after bad messages")
 	}
 	env.waitForLog(t, "ignoring malformed message")
-	env.waitForLog(t, "ignoring non-binary message")
+	env.waitForLog(t, "ignoring message with wrong frame type")
 }
 
 func TestCrossOriginRejected(t *testing.T) {
