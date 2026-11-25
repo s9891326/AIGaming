@@ -4,6 +4,7 @@ package config
 import (
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -19,6 +20,9 @@ type Config struct {
 	LogLevel  slog.Level
 	LogFormat logger.Format
 	LogColor  logger.ColorMode
+
+	// WSAllowJSON 允許 WebSocket 以 ?format=json 連線（除錯用）。預設只在非 release 模式開啟。
+	WSAllowJSON bool
 }
 
 // Addr 回傳監聽位址，例如 ":8080"。
@@ -26,13 +30,28 @@ func (c Config) Addr() string { return ":" + c.Port }
 
 // Load 讀取環境變數，未設定時使用預設值。
 func Load() Config {
+	ginMode := getEnv("GIN_MODE", gin.DebugMode)
 	return Config{
 		Port:      getEnv("PORT", "8080"),
-		GinMode:   getEnv("GIN_MODE", gin.DebugMode),
+		GinMode:   ginMode,
 		Version:   getEnv("APP_VERSION", "dev"),
 		LogLevel:  logger.ParseLevel(getEnv("LOG_LEVEL", "debug")),
 		LogFormat: logger.ParseFormat(getEnv("LOG_FORMAT", string(logger.FormatPretty))),
 		LogColor:  logger.ParseColorMode(getEnv("LOG_COLOR", string(logger.ColorAuto))),
+
+		WSAllowJSON: getBool("WS_ALLOW_JSON", ginMode != gin.ReleaseMode),
+	}
+}
+
+// getBool 讀取布林環境變數（1/true/yes/on 或 0/false/no/off），未設定或無法辨識時用預設值。
+func getBool(key string, fallback bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
 	}
 }
 

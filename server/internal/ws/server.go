@@ -5,6 +5,7 @@ package ws
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -22,10 +23,17 @@ type Handler interface {
 	OnDisconnect(c *Conn)
 }
 
+// Options 是 WebSocket 伺服器的設定。
+type Options struct {
+	// AllowJSON 允許以 ?format=json 連線（text frame + protojson），供 Postman 等工具除錯。
+	AllowJSON bool
+}
+
 // Server 是 WebSocket 端點（http.Handler），並追蹤目前所有連線。
 type Server struct {
 	log      *slog.Logger
 	handler  Handler
+	opts     Options
 	upgrader websocket.Upgrader
 
 	mu     sync.Mutex
@@ -38,10 +46,11 @@ type Server struct {
 //
 // Origin 檢查使用 gorilla 預設行為：Origin 的 host 必須等於請求的 Host。
 // 開發（Vite）與部署（nginx）都以同源方式代理 /ws，所以其他網站的頁面無法連進來。
-func NewServer(log *slog.Logger, h Handler) *Server {
+func NewServer(log *slog.Logger, h Handler, opts Options) *Server {
 	return &Server{
 		log:     log,
 		handler: h,
+		opts:    opts,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 4096,
@@ -51,7 +60,19 @@ func NewServer(log *slog.Logger, h Handler) *Server {
 }
 
 // ServeHTTP 把 HTTP 請求升級為 WebSocket，並啟動該連線的讀寫 goroutine。
+//
+// 連線網址可帶 ?format=json 改用 JSON（需 Options.AllowJSON）；格式錯誤時在升級前回 400。
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	format, err := ParseFormat(r.URL.Query().Get("format"))
+	if err == nil && format == FormatJSON && !s.opts.AllowJSON {
+		err = errors.New("format=json is disabled (set WS_ALLOW_JSON=true)")
+	}
+	if err != nil {
+		s.log.Warn("websocket rejected", "err", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	wsConn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		// Upgrade 失敗時已經回應 HTTP 錯誤。
@@ -61,11 +82,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	id := newID()
 	c := &Conn{
-		id:   id,
-		ws:   wsConn,
-		log:  s.log.With("conn", id),
-		send: make(chan []byte, sendBuffer),
-		done: make(chan struct{}),
+		id:     id,
+		ws:     wsConn,
+		log:    s.log.With("conn", id),
+		format: format,
+		send:   make(chan []byte, sendBuffer),
+		done:   make(chan struct{}),
 	}
 
 	n, ok := s.add(c)
@@ -77,7 +99,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = wsConn.Close()
 		return
 	}
-	c.log.Info("client connected", "ip", r.RemoteAddr, "connections", n)
+	c.log.Info("client connected", "ip", r.RemoteAddr, "format", format, "connections", n)
 
 	s.wg.Add(1)
 	go func() {

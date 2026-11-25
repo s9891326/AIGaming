@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"google.golang.org/protobuf/proto"
 
 	gamev1 "aigaming/server/internal/pb/game/v1"
 )
@@ -36,10 +35,11 @@ var ErrSendBufferFull = errors.New("ws: send buffer full")
 //
 // 其他 goroutine 一律透過 Send 把訊息放進 send channel，不直接碰底層連線。
 type Conn struct {
-	id   string
-	ws   *websocket.Conn
-	log  *slog.Logger
-	send chan []byte
+	id     string
+	ws     *websocket.Conn
+	log    *slog.Logger
+	format Format // 訊息編碼（protobuf / json），連線建立時決定
+	send   chan []byte
 
 	closeOnce sync.Once
 	done      chan struct{}
@@ -48,10 +48,13 @@ type Conn struct {
 // ID 回傳連線識別碼。
 func (c *Conn) ID() string { return c.id }
 
+// Format 回傳這條連線使用的訊息編碼。
+func (c *Conn) Format() Format { return c.format }
+
 // Send 把訊息編碼後排入待送佇列，不會阻塞。
 // 佇列已滿時關閉連線並回傳 ErrSendBufferFull（寧可踢掉慢的客戶端，也不拖慢遊戲迴圈）。
 func (c *Conn) Send(msg *gamev1.ServerMessage) error {
-	b, err := proto.Marshal(msg)
+	b, err := c.format.encode(msg)
 	if err != nil {
 		return err
 	}
@@ -101,12 +104,12 @@ func (c *Conn) readPump(h Handler) {
 		// 收到任何訊息都代表連線還活著。
 		_ = c.ws.SetReadDeadline(time.Now().Add(pongWait))
 
-		if typ != websocket.BinaryMessage {
-			c.log.Warn("ignoring non-binary message", "type", typ)
+		if typ != c.format.frameType() {
+			c.log.Warn("ignoring message with wrong frame type", "type", typ, "format", c.format)
 			continue
 		}
 		var msg gamev1.ClientMessage
-		if err := proto.Unmarshal(data, &msg); err != nil {
+		if err := c.format.decode(data, &msg); err != nil {
 			c.log.Warn("ignoring malformed message", "err", err, "bytes", len(data))
 			continue
 		}
@@ -126,7 +129,7 @@ func (c *Conn) writePump() {
 		select {
 		case b := <-c.send:
 			_ = c.ws.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.ws.WriteMessage(websocket.BinaryMessage, b); err != nil {
+			if err := c.ws.WriteMessage(c.format.frameType(), b); err != nil {
 				return
 			}
 		case <-ticker.C:
