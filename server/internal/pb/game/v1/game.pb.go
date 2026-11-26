@@ -25,6 +25,66 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// EnemyKind 是敵人種類。
+type EnemyKind int32
+
+const (
+	EnemyKind_ENEMY_KIND_UNSPECIFIED EnemyKind = 0
+	// 普通。
+	EnemyKind_ENEMY_KIND_GRUNT EnemyKind = 1
+	// 疾行者：快速、脆弱。
+	EnemyKind_ENEMY_KIND_RUNNER EnemyKind = 2
+	// 巨漢：慢速、耐打、撞到很痛。
+	EnemyKind_ENEMY_KIND_BRUTE EnemyKind = 3
+	// 精英：非常耐打，掉大量經驗。
+	EnemyKind_ENEMY_KIND_ELITE EnemyKind = 4
+)
+
+// Enum value maps for EnemyKind.
+var (
+	EnemyKind_name = map[int32]string{
+		0: "ENEMY_KIND_UNSPECIFIED",
+		1: "ENEMY_KIND_GRUNT",
+		2: "ENEMY_KIND_RUNNER",
+		3: "ENEMY_KIND_BRUTE",
+		4: "ENEMY_KIND_ELITE",
+	}
+	EnemyKind_value = map[string]int32{
+		"ENEMY_KIND_UNSPECIFIED": 0,
+		"ENEMY_KIND_GRUNT":       1,
+		"ENEMY_KIND_RUNNER":      2,
+		"ENEMY_KIND_BRUTE":       3,
+		"ENEMY_KIND_ELITE":       4,
+	}
+)
+
+func (x EnemyKind) Enum() *EnemyKind {
+	p := new(EnemyKind)
+	*p = x
+	return p
+}
+
+func (x EnemyKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EnemyKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_game_v1_game_proto_enumTypes[0].Descriptor()
+}
+
+func (EnemyKind) Type() protoreflect.EnumType {
+	return &file_game_v1_game_proto_enumTypes[0]
+}
+
+func (x EnemyKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EnemyKind.Descriptor instead.
+func (EnemyKind) EnumDescriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{0}
+}
+
 // ClientMessage 是客戶端送給伺服器的信封。
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -774,7 +834,15 @@ type PlayerState struct {
 	// 正在選升級（被凍結：不能移動、不受傷）。
 	Choosing bool `protobuf:"varint,12,opt,name=choosing,proto3" json:"choosing,omitempty"`
 	// 聖光環的半徑，0 代表沒有這把武器（用於繪製）。
-	AuraRadius    float32 `protobuf:"fixed32,13,opt,name=aura_radius,json=auraRadius,proto3" json:"aura_radius,omitempty"`
+	AuraRadius float32 `protobuf:"fixed32,13,opt,name=aura_radius,json=auraRadius,proto3" json:"aura_radius,omitempty"`
+	// 旋刃：片數（0 代表沒有）、繞行半徑、轉速（弧度 / 秒）、刀刃半徑。
+	// 角度 = orbit_speed × 伺服器時間（tick × tick 間隔）+ i × 2π / orbit_count，客戶端自行計算以保持平滑。
+	OrbitCount       uint32  `protobuf:"varint,14,opt,name=orbit_count,json=orbitCount,proto3" json:"orbit_count,omitempty"`
+	OrbitRadius      float32 `protobuf:"fixed32,15,opt,name=orbit_radius,json=orbitRadius,proto3" json:"orbit_radius,omitempty"`
+	OrbitSpeed       float32 `protobuf:"fixed32,16,opt,name=orbit_speed,json=orbitSpeed,proto3" json:"orbit_speed,omitempty"`
+	OrbitBladeRadius float32 `protobuf:"fixed32,17,opt,name=orbit_blade_radius,json=orbitBladeRadius,proto3" json:"orbit_blade_radius,omitempty"`
+	// 這個角色的存活時間（毫秒）。
+	SurvivedMs    uint32 `protobuf:"varint,18,opt,name=survived_ms,json=survivedMs,proto3" json:"survived_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -900,6 +968,41 @@ func (x *PlayerState) GetAuraRadius() float32 {
 	return 0
 }
 
+func (x *PlayerState) GetOrbitCount() uint32 {
+	if x != nil {
+		return x.OrbitCount
+	}
+	return 0
+}
+
+func (x *PlayerState) GetOrbitRadius() float32 {
+	if x != nil {
+		return x.OrbitRadius
+	}
+	return 0
+}
+
+func (x *PlayerState) GetOrbitSpeed() float32 {
+	if x != nil {
+		return x.OrbitSpeed
+	}
+	return 0
+}
+
+func (x *PlayerState) GetOrbitBladeRadius() float32 {
+	if x != nil {
+		return x.OrbitBladeRadius
+	}
+	return 0
+}
+
+func (x *PlayerState) GetSurvivedMs() uint32 {
+	if x != nil {
+		return x.SurvivedMs
+	}
+	return 0
+}
+
 // EnemyState 是快照中單一敵人的狀態。
 type EnemyState struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -907,8 +1010,11 @@ type EnemyState struct {
 	X     float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
 	Y     float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
 	// 目前血量與上限（被打中時前端閃白）。
-	Hp            uint32 `protobuf:"varint,4,opt,name=hp,proto3" json:"hp,omitempty"`
-	MaxHp         uint32 `protobuf:"varint,5,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
+	Hp    uint32    `protobuf:"varint,4,opt,name=hp,proto3" json:"hp,omitempty"`
+	MaxHp uint32    `protobuf:"varint,5,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
+	Kind  EnemyKind `protobuf:"varint,6,opt,name=kind,proto3,enum=game.v1.EnemyKind" json:"kind,omitempty"`
+	// 這隻敵人的碰撞半徑（依種類不同）。
+	Radius        float32 `protobuf:"fixed32,7,opt,name=radius,proto3" json:"radius,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -974,6 +1080,20 @@ func (x *EnemyState) GetHp() uint32 {
 func (x *EnemyState) GetMaxHp() uint32 {
 	if x != nil {
 		return x.MaxHp
+	}
+	return 0
+}
+
+func (x *EnemyState) GetKind() EnemyKind {
+	if x != nil {
+		return x.Kind
+	}
+	return EnemyKind_ENEMY_KIND_UNSPECIFIED
+}
+
+func (x *EnemyState) GetRadius() float32 {
+	if x != nil {
+		return x.Radius
 	}
 	return 0
 }
@@ -1405,7 +1525,7 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\aplayers\x18\x03 \x03(\v2\x14.game.v1.PlayerStateR\aplayers\x12-\n" +
 	"\aenemies\x18\x04 \x03(\v2\x13.game.v1.EnemyStateR\aenemies\x12:\n" +
 	"\vprojectiles\x18\x05 \x03(\v2\x18.game.v1.ProjectileStateR\vprojectiles\x12%\n" +
-	"\x04gems\x18\x06 \x03(\v2\x11.game.v1.GemStateR\x04gems\"\xb3\x02\n" +
+	"\x04gems\x18\x06 \x03(\v2\x11.game.v1.GemStateR\x04gems\"\xe7\x03\n" +
 	"\vPlayerState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -1422,14 +1542,24 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\x05speed\x18\v \x01(\x02R\x05speed\x12\x1a\n" +
 	"\bchoosing\x18\f \x01(\bR\bchoosing\x12\x1f\n" +
 	"\vaura_radius\x18\r \x01(\x02R\n" +
-	"auraRadius\"_\n" +
+	"auraRadius\x12\x1f\n" +
+	"\vorbit_count\x18\x0e \x01(\rR\n" +
+	"orbitCount\x12!\n" +
+	"\forbit_radius\x18\x0f \x01(\x02R\vorbitRadius\x12\x1f\n" +
+	"\vorbit_speed\x18\x10 \x01(\x02R\n" +
+	"orbitSpeed\x12,\n" +
+	"\x12orbit_blade_radius\x18\x11 \x01(\x02R\x10orbitBladeRadius\x12\x1f\n" +
+	"\vsurvived_ms\x18\x12 \x01(\rR\n" +
+	"survivedMs\"\x9f\x01\n" +
 	"\n" +
 	"EnemyState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
 	"\x01y\x18\x03 \x01(\x02R\x01y\x12\x0e\n" +
 	"\x02hp\x18\x04 \x01(\rR\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\x05 \x01(\rR\x05maxHp\"=\n" +
+	"\x06max_hp\x18\x05 \x01(\rR\x05maxHp\x12&\n" +
+	"\x04kind\x18\x06 \x01(\x0e2\x12.game.v1.EnemyKindR\x04kind\x12\x16\n" +
+	"\x06radius\x18\a \x01(\x02R\x06radius\"=\n" +
 	"\x0fProjectileState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -1454,7 +1584,13 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\x04rank\x18\x04 \x01(\rR\x04rank\"M\n" +
 	"\rChooseUpgrade\x12\x19\n" +
 	"\boffer_id\x18\x01 \x01(\rR\aofferId\x12!\n" +
-	"\foption_index\x18\x02 \x01(\rR\voptionIndexB,Z*aigaming/server/internal/pb/game/v1;gamev1b\x06proto3"
+	"\foption_index\x18\x02 \x01(\rR\voptionIndex*\x80\x01\n" +
+	"\tEnemyKind\x12\x1a\n" +
+	"\x16ENEMY_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10ENEMY_KIND_GRUNT\x10\x01\x12\x15\n" +
+	"\x11ENEMY_KIND_RUNNER\x10\x02\x12\x14\n" +
+	"\x10ENEMY_KIND_BRUTE\x10\x03\x12\x14\n" +
+	"\x10ENEMY_KIND_ELITE\x10\x04B,Z*aigaming/server/internal/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_game_proto_rawDescOnce sync.Once
@@ -1468,47 +1604,50 @@ func file_game_v1_game_proto_rawDescGZIP() []byte {
 	return file_game_v1_game_proto_rawDescData
 }
 
+var file_game_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_game_v1_game_proto_goTypes = []any{
-	(*ClientMessage)(nil),   // 0: game.v1.ClientMessage
-	(*ServerMessage)(nil),   // 1: game.v1.ServerMessage
-	(*Welcome)(nil),         // 2: game.v1.Welcome
-	(*Ping)(nil),            // 3: game.v1.Ping
-	(*Pong)(nil),            // 4: game.v1.Pong
-	(*JoinRequest)(nil),     // 5: game.v1.JoinRequest
-	(*JoinAccepted)(nil),    // 6: game.v1.JoinAccepted
-	(*PlayerInput)(nil),     // 7: game.v1.PlayerInput
-	(*WorldSnapshot)(nil),   // 8: game.v1.WorldSnapshot
-	(*PlayerState)(nil),     // 9: game.v1.PlayerState
-	(*EnemyState)(nil),      // 10: game.v1.EnemyState
-	(*ProjectileState)(nil), // 11: game.v1.ProjectileState
-	(*GemState)(nil),        // 12: game.v1.GemState
-	(*GameOver)(nil),        // 13: game.v1.GameOver
-	(*LevelUpOffer)(nil),    // 14: game.v1.LevelUpOffer
-	(*UpgradeOption)(nil),   // 15: game.v1.UpgradeOption
-	(*ChooseUpgrade)(nil),   // 16: game.v1.ChooseUpgrade
+	(EnemyKind)(0),          // 0: game.v1.EnemyKind
+	(*ClientMessage)(nil),   // 1: game.v1.ClientMessage
+	(*ServerMessage)(nil),   // 2: game.v1.ServerMessage
+	(*Welcome)(nil),         // 3: game.v1.Welcome
+	(*Ping)(nil),            // 4: game.v1.Ping
+	(*Pong)(nil),            // 5: game.v1.Pong
+	(*JoinRequest)(nil),     // 6: game.v1.JoinRequest
+	(*JoinAccepted)(nil),    // 7: game.v1.JoinAccepted
+	(*PlayerInput)(nil),     // 8: game.v1.PlayerInput
+	(*WorldSnapshot)(nil),   // 9: game.v1.WorldSnapshot
+	(*PlayerState)(nil),     // 10: game.v1.PlayerState
+	(*EnemyState)(nil),      // 11: game.v1.EnemyState
+	(*ProjectileState)(nil), // 12: game.v1.ProjectileState
+	(*GemState)(nil),        // 13: game.v1.GemState
+	(*GameOver)(nil),        // 14: game.v1.GameOver
+	(*LevelUpOffer)(nil),    // 15: game.v1.LevelUpOffer
+	(*UpgradeOption)(nil),   // 16: game.v1.UpgradeOption
+	(*ChooseUpgrade)(nil),   // 17: game.v1.ChooseUpgrade
 }
 var file_game_v1_game_proto_depIdxs = []int32{
-	3,  // 0: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
-	5,  // 1: game.v1.ClientMessage.join:type_name -> game.v1.JoinRequest
-	7,  // 2: game.v1.ClientMessage.input:type_name -> game.v1.PlayerInput
-	16, // 3: game.v1.ClientMessage.choose_upgrade:type_name -> game.v1.ChooseUpgrade
-	2,  // 4: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
-	4,  // 5: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
-	6,  // 6: game.v1.ServerMessage.join_accepted:type_name -> game.v1.JoinAccepted
-	8,  // 7: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
-	13, // 8: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
-	14, // 9: game.v1.ServerMessage.level_up_offer:type_name -> game.v1.LevelUpOffer
-	9,  // 10: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
-	10, // 11: game.v1.WorldSnapshot.enemies:type_name -> game.v1.EnemyState
-	11, // 12: game.v1.WorldSnapshot.projectiles:type_name -> game.v1.ProjectileState
-	12, // 13: game.v1.WorldSnapshot.gems:type_name -> game.v1.GemState
-	15, // 14: game.v1.LevelUpOffer.options:type_name -> game.v1.UpgradeOption
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	4,  // 0: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
+	6,  // 1: game.v1.ClientMessage.join:type_name -> game.v1.JoinRequest
+	8,  // 2: game.v1.ClientMessage.input:type_name -> game.v1.PlayerInput
+	17, // 3: game.v1.ClientMessage.choose_upgrade:type_name -> game.v1.ChooseUpgrade
+	3,  // 4: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
+	5,  // 5: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
+	7,  // 6: game.v1.ServerMessage.join_accepted:type_name -> game.v1.JoinAccepted
+	9,  // 7: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
+	14, // 8: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
+	15, // 9: game.v1.ServerMessage.level_up_offer:type_name -> game.v1.LevelUpOffer
+	10, // 10: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
+	11, // 11: game.v1.WorldSnapshot.enemies:type_name -> game.v1.EnemyState
+	12, // 12: game.v1.WorldSnapshot.projectiles:type_name -> game.v1.ProjectileState
+	13, // 13: game.v1.WorldSnapshot.gems:type_name -> game.v1.GemState
+	0,  // 14: game.v1.EnemyState.kind:type_name -> game.v1.EnemyKind
+	16, // 15: game.v1.LevelUpOffer.options:type_name -> game.v1.UpgradeOption
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_game_proto_init() }
@@ -1535,13 +1674,14 @@ func file_game_v1_game_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_game_proto_rawDesc), len(file_game_v1_game_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_game_v1_game_proto_goTypes,
 		DependencyIndexes: file_game_v1_game_proto_depIdxs,
+		EnumInfos:         file_game_v1_game_proto_enumTypes,
 		MessageInfos:      file_game_v1_game_proto_msgTypes,
 	}.Build()
 	File_game_v1_game_proto = out.File

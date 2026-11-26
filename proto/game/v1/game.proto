@@ -123,6 +123,14 @@ message PlayerState {
   bool choosing = 12;
   // 聖光環的半徑，0 代表沒有這把武器（用於繪製）。
   float aura_radius = 13;
+  // 旋刃：片數（0 代表沒有）、繞行半徑、轉速（弧度 / 秒）、刀刃半徑。
+  // 角度 = orbit_speed × 伺服器時間（tick × tick 間隔）+ i × 2π / orbit_count，客戶端自行計算以保持平滑。
+  uint32 orbit_count = 14;
+  float orbit_radius = 15;
+  float orbit_speed = 16;
+  float orbit_blade_radius = 17;
+  // 這個角色的存活時間（毫秒）。
+  uint32 survived_ms = 18;
 }
 
 // EnemyState 是快照中單一敵人的狀態。
@@ -133,6 +141,22 @@ message EnemyState {
   // 目前血量與上限（被打中時前端閃白）。
   uint32 hp = 4;
   uint32 max_hp = 5;
+  EnemyKind kind = 6;
+  // 這隻敵人的碰撞半徑（依種類不同）。
+  float radius = 7;
+}
+
+// EnemyKind 是敵人種類。
+enum EnemyKind {
+  ENEMY_KIND_UNSPECIFIED = 0;
+  // 普通。
+  ENEMY_KIND_GRUNT = 1;
+  // 疾行者：快速、脆弱。
+  ENEMY_KIND_RUNNER = 2;
+  // 巨漢：慢速、耐打、撞到很痛。
+  ENEMY_KIND_BRUTE = 3;
+  // 精英：非常耐打，掉大量經驗。
+  ENEMY_KIND_ELITE = 4;
 }
 
 // ProjectileState 是快照中單一投射物的狀態。
