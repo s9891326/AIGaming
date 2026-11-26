@@ -13,6 +13,16 @@ export interface JoinInfo {
   playerRadius: number
   playerSpeed: number
   enemyRadius: number
+  projectileRadius: number
+  gemRadius: number
+}
+
+/** 自己的成長數據（來自最新快照，不預測）。 */
+export interface PlayerProgress {
+  level: number
+  xp: number
+  xpToNext: number
+  kills: number
 }
 
 /** 一個要畫在畫面上的角色。 */
@@ -31,8 +41,13 @@ export interface RenderView {
   self?: RenderPlayer
   /** 其他玩家（位置是插值）。 */
   others: RenderPlayer[]
-  /** 敵人（位置是插值）。 */
-  enemies: { id: number; pos: Vec }[]
+  /** 敵人（位置是插值；hurt = 剛被打中）。 */
+  enemies: { id: number; pos: Vec; hurt: boolean }[]
+  /** 投射物與經驗寶石（位置是插值）。 */
+  projectiles: { id: number; pos: Vec }[]
+  gems: { id: number; pos: Vec }[]
+  /** 自己的等級、經驗、擊殺數。 */
+  progress?: PlayerProgress
   tick?: number
   pendingInputs: number
   /** 最近一次伺服器校正的距離（遊戲單位），0 代表預測完全正確。 */
@@ -63,6 +78,11 @@ export class GameClient {
   private predictor?: Predictor
   private readonly buffer = new SnapshotBuffer()
   private readonly enemyBuffer = new SnapshotBuffer()
+  private readonly projectileBuffer = new SnapshotBuffer()
+  private readonly gemBuffer = new SnapshotBuffer()
+  /** 敵人與玩家的 ID 是不同的編號空間，所以血量分開追蹤。 */
+  private readonly enemyHealth = new HealthTracker()
+  private progress?: PlayerProgress
   private readonly clock = new ServerClock()
   private readonly health = new HealthTracker()
 
@@ -123,9 +143,19 @@ export class GameClient {
     let self: { x: number; y: number; lastInputSeq: number } | undefined
     for (const p of snap.players) {
       this.health.observe(p.id, p.hp, p.maxHp, now)
-      if (p.id === this.join.playerId) self = p
-      else others.set(p.id, { x: p.x, y: p.y })
+      if (p.id === this.join.playerId) {
+        self = p
+        this.progress = { level: p.level, xp: p.xp, xpToNext: p.xpToNext, kills: p.kills }
+      } else {
+        others.set(p.id, { x: p.x, y: p.y })
+      }
     }
+    for (const e of snap.enemies) this.enemyHealth.observe(e.id, e.hp, e.maxHp, now)
+    this.enemyHealth.retain(new Set(snap.enemies.map((e) => e.id)))
+    const positions = (list: readonly { id: number; x: number; y: number }[]) =>
+      new Map(list.map((o) => [o.id, { x: o.x, y: o.y }]))
+    this.projectileBuffer.push({ time, entities: positions(snap.projectiles) })
+    this.gemBuffer.push({ time, entities: positions(snap.gems) })
     this.health.retain(new Set(snap.players.map((p) => p.id)))
     this.buffer.push({ time, entities: others })
     this.enemyBuffer.push({
@@ -208,10 +238,17 @@ export class GameClient {
 
     const others: RenderPlayer[] = []
     const enemies: RenderView['enemies'] = []
+    const projectiles: RenderView['projectiles'] = []
+    const gems: RenderView['gems'] = []
     if (this.clock.ready) {
       const renderTime = this.clock.toServerTime(now) - INTERP_DELAY_MS
       for (const [id, p] of this.buffer.sample(renderTime)) others.push(player(id, p))
-      for (const [id, p] of this.enemyBuffer.sample(renderTime)) enemies.push({ id, pos: p })
+      for (const [id, p] of this.enemyBuffer.sample(renderTime)) {
+        enemies.push({ id, pos: p, hurt: this.enemyHealth.isHurt(id, now) })
+      }
+      for (const [id, p] of this.projectileBuffer.sample(renderTime))
+        projectiles.push({ id, pos: p })
+      for (const [id, p] of this.gemBuffer.sample(renderTime)) gems.push({ id, pos: p })
     }
 
     return {
@@ -219,6 +256,9 @@ export class GameClient {
       self,
       others,
       enemies,
+      projectiles,
+      gems,
+      progress: this.join ? this.progress : undefined,
       tick: this.lastTick,
       pendingInputs: this.predictor?.pendingCount ?? 0,
       lastCorrection: this.lastCorrection,
@@ -233,6 +273,10 @@ export class GameClient {
     this.predictor = undefined
     this.buffer.clear()
     this.enemyBuffer.clear()
+    this.projectileBuffer.clear()
+    this.gemBuffer.clear()
+    this.enemyHealth.clear()
+    this.progress = undefined
     this.clock.reset()
     this.health.clear()
     this.seq = 0
