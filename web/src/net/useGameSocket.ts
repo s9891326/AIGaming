@@ -169,6 +169,8 @@ export function useGameSocket({
                 playerRadius: v.playerRadius,
                 playerSpeed: v.playerSpeed,
                 enemyRadius: v.enemyRadius,
+                projectileRadius: v.projectileRadius,
+                gemRadius: v.gemRadius,
               }
               game.onJoin(info)
               setJoin(info)

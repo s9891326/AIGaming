@@ -30,6 +30,10 @@ const COLORS = {
   hp: '#4caf7d',
   hpLow: '#e5534b',
   hurt: '#ffffff',
+  projectile: '#ffd36b',
+  gem: '#5ad1e6',
+  gemEdge: '#2b8fa3',
+  xp: '#5ad1e6',
 }
 
 /**
@@ -82,17 +86,44 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         ctx.strokeRect(-2, -2, world.w + 4, world.h + 4)
       }
 
-      // 敵人先畫，玩家疊在上面。
+      // 由下而上：寶石 → 敵人 → 投射物 → 玩家。
+      const gr = v.join?.gemRadius ?? 7
+      ctx.fillStyle = COLORS.gem
+      ctx.strokeStyle = COLORS.gemEdge
+      ctx.lineWidth = 1.5
+      for (const g of v.gems) {
+        // 菱形
+        ctx.beginPath()
+        ctx.moveTo(g.pos.x, g.pos.y - gr)
+        ctx.lineTo(g.pos.x + gr * 0.75, g.pos.y)
+        ctx.lineTo(g.pos.x, g.pos.y + gr)
+        ctx.lineTo(g.pos.x - gr * 0.75, g.pos.y)
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+      }
+
       const er = v.join?.enemyRadius ?? 14
-      ctx.fillStyle = COLORS.enemy
       ctx.strokeStyle = COLORS.enemyEdge
       ctx.lineWidth = 2
       for (const e of v.enemies) {
+        ctx.fillStyle = e.hurt ? COLORS.hurt : COLORS.enemy
         ctx.beginPath()
         ctx.arc(e.pos.x, e.pos.y, er, 0, Math.PI * 2)
         ctx.fill()
         ctx.stroke()
       }
+
+      const pr = v.join?.projectileRadius ?? 6
+      ctx.fillStyle = COLORS.projectile
+      ctx.shadowColor = COLORS.projectile
+      ctx.shadowBlur = 10
+      for (const p of v.projectiles) {
+        ctx.beginPath()
+        ctx.arc(p.pos.x, p.pos.y, pr, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.shadowBlur = 0
 
       ctx.font = '12px system-ui, sans-serif'
       ctx.textAlign = 'center'
@@ -141,6 +172,24 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         ctx.fillText(`HP ${v.self.hp} / ${v.self.maxHp}`, x + w + 12, y + h - 2)
       }
 
+      // 經驗條（畫面最上方，全寬）
+      const prog = v.progress
+      if (prog) {
+        const h = 8
+        const ratio = prog.xpToNext > 0 ? Math.min(1, prog.xp / prog.xpToNext) : 0
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(0, 0, VIEW_W, h)
+        ctx.fillStyle = COLORS.xp
+        ctx.fillRect(0, 0, VIEW_W * ratio, h)
+        ctx.font = 'bold 14px system-ui, sans-serif'
+        ctx.textAlign = 'right'
+        ctx.fillStyle = COLORS.text
+        ctx.fillText(`Lv ${prog.level}`, VIEW_W - 12, h + 18)
+        ctx.font = '12px ui-monospace, Consolas, monospace'
+        ctx.fillStyle = COLORS.muted
+        ctx.fillText(`XP ${prog.xp} / ${prog.xpToNext}  ·  擊殺 ${prog.kills}`, VIEW_W - 12, h + 36)
+      }
+
       // HUD（固定在畫面左上，不跟相機移動）
       ctx.textAlign = 'left'
       ctx.font = '12px ui-monospace, Consolas, monospace'
@@ -150,6 +199,7 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         [`RTT ${v.rttMs === undefined ? '-' : `${v.rttMs.toFixed(0)} ms`}`],
         [`players ${v.others.length + (v.self ? 1 : 0)}`],
         [`enemies ${v.enemies.length}`],
+        [`projectiles ${v.projectiles.length}  gems ${v.gems.length}`],
         [`pending inputs ${v.pendingInputs}`],
         [
           `correction ${v.lastCorrection.toFixed(2)}`,
@@ -160,7 +210,7 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
       if (simulatedLagMs) hud.push([`simulated lag ${simulatedLagMs} ms`, COLORS.warn])
       hud.forEach(([line, color], i) => {
         ctx.fillStyle = color ?? COLORS.muted
-        ctx.fillText(line, 12, 20 + i * 16)
+        ctx.fillText(line, 12, 28 + i * 16)
       })
 
       if (overlay) {

@@ -12,8 +12,9 @@ type EnemyID uint32
 
 // Enemy 是一隻敵人。
 type Enemy struct {
-	ID  EnemyID
-	Pos Vec2
+	ID        EnemyID
+	Pos       Vec2
+	HP, MaxHP int
 }
 
 // CombatConfig 是敵人與戰鬥相關的參數。
@@ -25,6 +26,7 @@ type CombatConfig struct {
 
 	EnemySpeed  float64
 	EnemyRadius float64
+	EnemyHP     int
 	MaxEnemies  int // 全世界敵人上限
 
 	// 每位玩家附近的生成速率（隻 / 秒）= min(SpawnRateBase + SpawnRateGrowth × 存活秒數, SpawnRateMax)
@@ -43,6 +45,7 @@ var DefaultCombatConfig = CombatConfig{
 	ContactDamage:   10,
 	EnemySpeed:      110,
 	EnemyRadius:     14,
+	EnemyHP:         20,
 	MaxEnemies:      300,
 	SpawnRateBase:   0.8,
 	SpawnRateGrowth: 0.06,
@@ -82,7 +85,12 @@ func (w *World) spawnEnemies(players []*Player, dt float64) {
 				break
 			}
 			p.spawnAccum--
-			w.enemies = append(w.enemies, &Enemy{ID: w.nextEnemyID, Pos: w.spawnPoint(p.Pos)})
+			w.enemies = append(w.enemies, &Enemy{
+				ID:    w.nextEnemyID,
+				Pos:   w.spawnPoint(p.Pos),
+				HP:    c.EnemyHP,
+				MaxHP: c.EnemyHP,
+			})
 			w.nextEnemyID++
 		}
 	}

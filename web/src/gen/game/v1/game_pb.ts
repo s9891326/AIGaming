@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/game.proto.
  */
 export const file_game_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCLiAQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SAASJgoJZ2FtZV9vdmVyGAUgASgLMhEuZ2FtZS52MS5HYW1lT3ZlckgAQgkKB3BheWxvYWQiOAoHV2VsY29tZRIVCg1jb25uZWN0aW9uX2lkGAEgASgJEhYKDnNlcnZlcl92ZXJzaW9uGAIgASgJIh4KBFBpbmcSFgoOY2xpZW50X3RpbWVfbXMYASABKAEiNgoEUG9uZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoARIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoASINCgtKb2luUmVxdWVzdCKiAQoMSm9pbkFjY2VwdGVkEhEKCXBsYXllcl9pZBgBIAEoDRITCgt3b3JsZF93aWR0aBgCIAEoAhIUCgx3b3JsZF9oZWlnaHQYAyABKAISEQoJdGlja19yYXRlGAQgASgNEhUKDXBsYXllcl9yYWRpdXMYBSABKAISFAoMcGxheWVyX3NwZWVkGAYgASgCEhQKDGVuZW15X3JhZGl1cxgHIAEoAiI6CgtQbGF5ZXJJbnB1dBILCgNzZXEYASABKA0SDgoGbW92ZV94GAIgASgCEg4KBm1vdmVfeRgDIAEoAiKCAQoNV29ybGRTbmFwc2hvdBIMCgR0aWNrGAEgASgNEhYKDnNlcnZlcl90aW1lX21zGAIgASgBEiUKB3BsYXllcnMYAyADKAsyFC5nYW1lLnYxLlBsYXllclN0YXRlEiQKB2VuZW1pZXMYBCADKAsyEy5nYW1lLnYxLkVuZW15U3RhdGUiYwoLUGxheWVyU3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF5GAMgASgCEhYKDmxhc3RfaW5wdXRfc2VxGAQgASgNEgoKAmhwGAUgASgNEg4KBm1heF9ocBgGIAEoDSIuCgpFbmVteVN0YXRlEgoKAmlkGAEgASgNEgkKAXgYAiABKAISCQoBeRgDIAEoAiIuCghHYW1lT3ZlchITCgtzdXJ2aXZlZF9tcxgBIAEoDRINCgVraWxscxgCIAEoDUIsWiphaWdhbWluZy9zZXJ2ZXIvaW50ZXJuYWwvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw");
+  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCLiAQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SAASJgoJZ2FtZV9vdmVyGAUgASgLMhEuZ2FtZS52MS5HYW1lT3ZlckgAQgkKB3BheWxvYWQiOAoHV2VsY29tZRIVCg1jb25uZWN0aW9uX2lkGAEgASgJEhYKDnNlcnZlcl92ZXJzaW9uGAIgASgJIh4KBFBpbmcSFgoOY2xpZW50X3RpbWVfbXMYASABKAEiNgoEUG9uZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoARIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoASINCgtKb2luUmVxdWVzdCLRAQoMSm9pbkFjY2VwdGVkEhEKCXBsYXllcl9pZBgBIAEoDRITCgt3b3JsZF93aWR0aBgCIAEoAhIUCgx3b3JsZF9oZWlnaHQYAyABKAISEQoJdGlja19yYXRlGAQgASgNEhUKDXBsYXllcl9yYWRpdXMYBSABKAISFAoMcGxheWVyX3NwZWVkGAYgASgCEhQKDGVuZW15X3JhZGl1cxgHIAEoAhIZChFwcm9qZWN0aWxlX3JhZGl1cxgIIAEoAhISCgpnZW1fcmFkaXVzGAkgASgCIjoKC1BsYXllcklucHV0EgsKA3NlcRgBIAEoDRIOCgZtb3ZlX3gYAiABKAISDgoGbW92ZV95GAMgASgCItIBCg1Xb3JsZFNuYXBzaG90EgwKBHRpY2sYASABKA0SFgoOc2VydmVyX3RpbWVfbXMYAiABKAESJQoHcGxheWVycxgDIAMoCzIULmdhbWUudjEuUGxheWVyU3RhdGUSJAoHZW5lbWllcxgEIAMoCzITLmdhbWUudjEuRW5lbXlTdGF0ZRItCgtwcm9qZWN0aWxlcxgFIAMoCzIYLmdhbWUudjEuUHJvamVjdGlsZVN0YXRlEh8KBGdlbXMYBiADKAsyES5nYW1lLnYxLkdlbVN0YXRlIqEBCgtQbGF5ZXJTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISFgoObGFzdF9pbnB1dF9zZXEYBCABKA0SCgoCaHAYBSABKA0SDgoGbWF4X2hwGAYgASgNEgoKAnhwGAcgASgNEhIKCnhwX3RvX25leHQYCCABKA0SDQoFbGV2ZWwYCSABKA0SDQoFa2lsbHMYCiABKA0iSgoKRW5lbXlTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISCgoCaHAYBCABKA0SDgoGbWF4X2hwGAUgASgNIjMKD1Byb2plY3RpbGVTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAIiOwoIR2VtU3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF5GAMgASgCEg0KBXZhbHVlGAQgASgNIi4KCEdhbWVPdmVyEhMKC3N1cnZpdmVkX21zGAEgASgNEg0KBWtpbGxzGAIgASgNQixaKmFpZ2FtaW5nL3NlcnZlci9pbnRlcm5hbC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z");
 
 /**
  * ClientMessage 是客戶端送給伺服器的信封。
@@ -248,6 +248,18 @@ export type JoinAccepted = Message<"game.v1.JoinAccepted"> & {
    * @generated from field: float enemy_radius = 7;
    */
   enemyRadius: number;
+
+  /**
+   * 投射物與經驗寶石的半徑（遊戲單位），用於繪製。
+   *
+   * @generated from field: float projectile_radius = 8;
+   */
+  projectileRadius: number;
+
+  /**
+   * @generated from field: float gem_radius = 9;
+   */
+  gemRadius: number;
 };
 
 /**
@@ -322,6 +334,16 @@ export type WorldSnapshot = Message<"game.v1.WorldSnapshot"> & {
    * @generated from field: repeated game.v1.EnemyState enemies = 4;
    */
   enemies: EnemyState[];
+
+  /**
+   * @generated from field: repeated game.v1.ProjectileState projectiles = 5;
+   */
+  projectiles: ProjectileState[];
+
+  /**
+   * @generated from field: repeated game.v1.GemState gems = 6;
+   */
+  gems: GemState[];
 };
 
 /**
@@ -372,6 +394,30 @@ export type PlayerState = Message<"game.v1.PlayerState"> & {
    * @generated from field: uint32 max_hp = 6;
    */
   maxHp: number;
+
+  /**
+   * 經驗值：目前等級累積的經驗、升到下一級需要的經驗、等級。
+   *
+   * @generated from field: uint32 xp = 7;
+   */
+  xp: number;
+
+  /**
+   * @generated from field: uint32 xp_to_next = 8;
+   */
+  xpToNext: number;
+
+  /**
+   * @generated from field: uint32 level = 9;
+   */
+  level: number;
+
+  /**
+   * 擊殺數。
+   *
+   * @generated from field: uint32 kills = 10;
+   */
+  kills: number;
 };
 
 /**
@@ -401,6 +447,18 @@ export type EnemyState = Message<"game.v1.EnemyState"> & {
    * @generated from field: float y = 3;
    */
   y: number;
+
+  /**
+   * 目前血量與上限（被打中時前端閃白）。
+   *
+   * @generated from field: uint32 hp = 4;
+   */
+  hp: number;
+
+  /**
+   * @generated from field: uint32 max_hp = 5;
+   */
+  maxHp: number;
 };
 
 /**
@@ -409,6 +467,71 @@ export type EnemyState = Message<"game.v1.EnemyState"> & {
  */
 export const EnemyStateSchema: GenMessage<EnemyState> = /*@__PURE__*/
   messageDesc(file_game_v1_game, 10);
+
+/**
+ * ProjectileState 是快照中單一投射物的狀態。
+ *
+ * @generated from message game.v1.ProjectileState
+ */
+export type ProjectileState = Message<"game.v1.ProjectileState"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: float x = 2;
+   */
+  x: number;
+
+  /**
+   * @generated from field: float y = 3;
+   */
+  y: number;
+};
+
+/**
+ * Describes the message game.v1.ProjectileState.
+ * Use `create(ProjectileStateSchema)` to create a new message.
+ */
+export const ProjectileStateSchema: GenMessage<ProjectileState> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 11);
+
+/**
+ * GemState 是快照中單一經驗寶石的狀態。
+ *
+ * @generated from message game.v1.GemState
+ */
+export type GemState = Message<"game.v1.GemState"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: float x = 2;
+   */
+  x: number;
+
+  /**
+   * @generated from field: float y = 3;
+   */
+  y: number;
+
+  /**
+   * 撿到後增加的經驗值。
+   *
+   * @generated from field: uint32 value = 4;
+   */
+  value: number;
+};
+
+/**
+ * Describes the message game.v1.GemState.
+ * Use `create(GemStateSchema)` to create a new message.
+ */
+export const GemStateSchema: GenMessage<GemState> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 12);
 
 /**
  * GameOver 在自己的角色血量歸零時送出。之後不再收到快照，
@@ -437,5 +560,5 @@ export type GameOver = Message<"game.v1.GameOver"> & {
  * Use `create(GameOverSchema)` to create a new message.
  */
 export const GameOverSchema: GenMessage<GameOver> = /*@__PURE__*/
-  messageDesc(file_game_v1_game, 11);
+  messageDesc(file_game_v1_game, 13);
 

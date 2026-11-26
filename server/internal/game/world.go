@@ -38,6 +38,9 @@ type WorldConfig struct {
 	MaxInputBudget float64
 
 	Combat CombatConfig
+	Loot   LootConfig
+	// StartingWeapons 建立新玩家一開始的武器；nil 代表沒有武器。
+	StartingWeapons func() []Weapon
 }
 
 // DefaultWorldConfig 是預設的世界參數：世界比畫面（960×640）大，相機跟隨玩家。
@@ -49,6 +52,10 @@ var DefaultWorldConfig = WorldConfig{
 	InputDt:        1.0 / 20,
 	MaxInputBudget: 0.25,
 	Combat:         DefaultCombatConfig,
+	Loot:           DefaultLootConfig,
+	StartingWeapons: func() []Weapon {
+		return []Weapon{NewMagicBolt(DefaultMagicBolt)}
+	},
 }
 
 // Player 是一個角色。
@@ -62,6 +69,8 @@ type Player struct {
 	Age        float64 // 存活秒數
 	Invuln     float64 // 剩餘無敵秒數（加入保護、受傷後無敵）
 	Kills      uint32
+	XP, Level  int
+	Weapons    []Weapon
 	spawnAccum float64 // 累積的生成量，滿 1 就在這位玩家附近生成一隻敵人
 }
 
@@ -74,17 +83,25 @@ type World struct {
 
 	enemies     []*Enemy
 	nextEnemyID EnemyID
-	rng         *rand.Rand // 生成位置等隨機性；測試可換成固定種子
+
+	projectiles      []*Projectile
+	nextProjectileID ProjectileID
+	gems             []*Gem
+	nextGemID        GemID
+
+	rng *rand.Rand // 生成位置等隨機性；測試可換成固定種子
 }
 
 // NewWorld 建立空的世界。
 func NewWorld(cfg WorldConfig) *World {
 	return &World{
-		cfg:         cfg,
-		nextID:      1,
-		players:     make(map[PlayerID]*Player),
-		nextEnemyID: 1,
-		rng:         rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+		cfg:              cfg,
+		nextID:           1,
+		players:          make(map[PlayerID]*Player),
+		nextEnemyID:      1,
+		nextProjectileID: 1,
+		nextGemID:        1,
+		rng:              rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 	}
 }
 
@@ -98,6 +115,10 @@ func (w *World) Tick() uint32 { return w.tick }
 func (w *World) AddPlayer() PlayerID {
 	id := w.nextID
 	w.nextID++
+	var weapons []Weapon
+	if w.cfg.StartingWeapons != nil {
+		weapons = w.cfg.StartingWeapons()
+	}
 	w.players[id] = &Player{
 		ID:          id,
 		Pos:         Vec2{w.cfg.Width / 2, w.cfg.Height / 2},
@@ -105,6 +126,8 @@ func (w *World) AddPlayer() PlayerID {
 		HP:          w.cfg.Combat.PlayerMaxHP,
 		MaxHP:       w.cfg.Combat.PlayerMaxHP,
 		Invuln:      w.cfg.Combat.SpawnProtection,
+		Level:       1,
+		Weapons:     weapons,
 	}
 	return id
 }
@@ -146,7 +169,8 @@ func (w *World) ApplyInput(id PlayerID, seq uint32, x, y float64) InputResult {
 // Step 推進模擬 dt 秒，回傳這個 tick 死亡的玩家（已從世界移除）。
 //
 // 玩家的移動完全由 ApplyInput 驅動（客戶端可以用同樣的算法預測自己的位置）；
-// Step 負責時間相關的事：輸入預算、無敵時間、敵人生成 / 移動 / 分離、接觸傷害。
+// Step 負責時間相關的事，依序：輸入預算與無敵時間 → 敵人生成 / 移動 / 分離 →
+// 武器發射 → 投射物移動與命中（敵人死亡、掉寶石）→ 寶石吸取與經驗 → 接觸傷害。
 func (w *World) Step(dt float64) []Death {
 	w.tick++
 	for _, p := range w.players {
@@ -155,14 +179,19 @@ func (w *World) Step(dt float64) []Death {
 		p.Invuln = math.Max(0, p.Invuln-dt)
 	}
 	if len(w.players) == 0 {
-		// 沒有人在玩：清空敵人，下一位加入的玩家從乾淨的世界開始。
+		// 沒有人在玩：清空敵人與掉落物，下一位加入的玩家從乾淨的世界開始。
 		w.enemies = w.enemies[:0]
+		w.projectiles = w.projectiles[:0]
+		w.gems = w.gems[:0]
 		return nil
 	}
 	players := w.sortedPlayers()
 	w.spawnEnemies(players, dt)
 	w.moveEnemies(players, dt)
 	w.separateEnemies()
+	w.updateWeapons(players, dt)
+	w.updateProjectiles(dt) // 打死的敵人在接觸傷害之前就移除
+	w.updateGems(players, dt)
 	return w.applyContactDamage(players)
 }
 

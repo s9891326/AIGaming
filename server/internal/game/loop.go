@@ -106,13 +106,15 @@ func (l *Loop) Join(key string, sink Sink) {
 		l.members[key] = &member{id: id, sink: sink}
 		_ = sink.Send(&gamev1.ServerMessage{Payload: &gamev1.ServerMessage_JoinAccepted{
 			JoinAccepted: &gamev1.JoinAccepted{
-				PlayerId:     uint32(id),
-				WorldWidth:   float32(l.cfg.World.Width),
-				WorldHeight:  float32(l.cfg.World.Height),
-				TickRate:     uint32(l.cfg.TickRate),
-				PlayerRadius: float32(l.cfg.World.PlayerRadius),
-				PlayerSpeed:  float32(l.cfg.World.PlayerSpeed),
-				EnemyRadius:  float32(l.cfg.World.Combat.EnemyRadius),
+				PlayerId:         uint32(id),
+				WorldWidth:       float32(l.cfg.World.Width),
+				WorldHeight:      float32(l.cfg.World.Height),
+				TickRate:         uint32(l.cfg.TickRate),
+				PlayerRadius:     float32(l.cfg.World.PlayerRadius),
+				PlayerSpeed:      float32(l.cfg.World.PlayerSpeed),
+				EnemyRadius:      float32(l.cfg.World.Combat.EnemyRadius),
+				ProjectileRadius: float32(DefaultMagicBolt.Radius),
+				GemRadius:        float32(l.cfg.World.Loot.GemRadius),
 			},
 		}})
 		l.log.Info("player joined", "conn", key, "player", id, "players", len(l.members))
@@ -188,18 +190,37 @@ func (l *Loop) broadcast() {
 			LastInputSeq: p.LastInputSeq,
 			Hp:           uint32(p.HP),
 			MaxHp:        uint32(p.MaxHP),
+			Xp:           uint32(p.XP),
+			XpToNext:     uint32(l.cfg.World.Loot.XPToNext(p.Level)),
+			Level:        uint32(p.Level),
+			Kills:        p.Kills,
 		}
 	}
 	enemies := l.world.Enemies()
 	enemyStates := make([]*gamev1.EnemyState, len(enemies))
 	for i, e := range enemies {
-		enemyStates[i] = &gamev1.EnemyState{Id: uint32(e.ID), X: float32(e.Pos.X), Y: float32(e.Pos.Y)}
+		enemyStates[i] = &gamev1.EnemyState{
+			Id: uint32(e.ID), X: float32(e.Pos.X), Y: float32(e.Pos.Y),
+			Hp: uint32(e.HP), MaxHp: uint32(e.MaxHP),
+		}
+	}
+	projectiles := l.world.Projectiles()
+	projectileStates := make([]*gamev1.ProjectileState, len(projectiles))
+	for i, p := range projectiles {
+		projectileStates[i] = &gamev1.ProjectileState{Id: uint32(p.ID), X: float32(p.Pos.X), Y: float32(p.Pos.Y)}
+	}
+	gems := l.world.Gems()
+	gemStates := make([]*gamev1.GemState, len(gems))
+	for i, g := range gems {
+		gemStates[i] = &gamev1.GemState{Id: uint32(g.ID), X: float32(g.Pos.X), Y: float32(g.Pos.Y), Value: uint32(g.Value)}
 	}
 	msg := &gamev1.ServerMessage{Payload: &gamev1.ServerMessage_Snapshot{Snapshot: &gamev1.WorldSnapshot{
 		Tick:         l.world.Tick(),
 		ServerTimeMs: float64(l.now().UnixMilli()),
 		Players:      states,
 		Enemies:      enemyStates,
+		Projectiles:  projectileStates,
+		Gems:         gemStates,
 	}}}
 	for _, m := range l.members {
 		// Send 不會阻塞；失敗代表連線正在關閉，稍後會收到 Leave。

@@ -117,7 +117,8 @@ task down   # 停止
   │ ◀──────── Welcome{connection_id} ─── │
   │ ── JoinRequest ────────────────────▶ │
   │ ◀── JoinAccepted{player_id, world} ─ │  保證在第一個含自己的快照之前
-  │ ◀── WorldSnapshot{tick, players[], enemies[]} │  每個 tick（20Hz），含每人的 hp、last_input_seq
+  │ ◀── WorldSnapshot{tick, players[], enemies[], projectiles[], gems[]} │
+  │                                      │  每個 tick（20Hz），含每人的 hp / xp / level / kills、last_input_seq
   │ ◀──── GameOver{survived_ms, kills} ── │  自己 HP 歸零時；之後不再收到快照，重送 JoinRequest 即再來一局
   │ ── PlayerInput{seq, move_x, move_y} ▶ │  移動時每個 tick 一筆（= 移動 1/20 秒），不動時不送
   │ ── Ping{client_time_ms} ───────────▶ │  每秒一次
@@ -166,7 +167,7 @@ task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
                                        ticker 20Hz ──▶ World.Step(0.05s) ──▶ 廣播 WorldSnapshot
 ```
 
-- `server/internal/game/world.go`、`combat.go`：純遊戲規則（移動、輸入正規化、邊界、敵人、傷害），不碰網路、不開 goroutine，單元測試直接呼叫。
+- `server/internal/game/world.go`、`combat.go`、`weapons.go`、`loot.go`：純遊戲規則（移動、輸入正規化、邊界、敵人、傷害），不碰網路、不開 goroutine，單元測試直接呼叫。
 - `server/internal/game/loop.go`：其他 goroutine 只把「要做的事」包成閉包送進 channel，World 永遠只有一個擁有者，不需要鎖。
 - 客戶端只送「想往哪走」；位置一律由伺服器算，長度超過 1 的輸入會被正規化（斜走不會比較快）、NaN 會被丟棄。
 - **移動由輸入驅動**：一筆 `PlayerInput` = 往該方向移動一個 tick（`MoveStep`），伺服器收到就套用；`Step` 只推進 tick 並補充每人的「輸入時間預算」。每筆輸入扣 1/20 秒預算、上限 0.25 秒，所以網路抖動造成的短暫爆量能被吸收，但長期每秒最多只能移動 1 秒的量（多送輸入無法加速）。
@@ -183,6 +184,9 @@ task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
 | 分離 | 重疊的敵人互相推開，避免疊成一點（目前 O(n²)，#10 換空間格子） |
 | 傷害 | 碰到就扣 10；受傷後無敵 0.5 秒、加入後保護 2 秒；HP 100 |
 | 死亡 | 該玩家移出世界、收到 `GameOver`，其他玩家不受影響；按「再來一局」（或 Enter）重新加入 |
+| 武器 | `Weapon` 介面（`weapons.go`），每 tick 由 World 呼叫；武器自己管冷卻並發射投射物。第一把「魔法飛彈」：每 0.8 秒朝 450 內最近的敵人射一發，速度 450、傷害 20、飛 1.3 秒，命中一隻就消失 |
+| 敵人死亡 | 敵人 HP 20（一發打死）；擊殺記給發射者，原地掉一顆經驗寶石 |
+| 寶石與經驗 | 玩家 100 內的寶石以 400/秒飛過來，碰到就收集（`loot.go`）；升級需要 `5 × 等級` 經驗，多的保留；最多 500 顆 |
 
 - 敵人不會推動玩家，所以客戶端預測不受影響（玩家位置仍只由輸入決定）。
 - 亂數來源可替換：測試用固定種子，同樣的種子 → 同樣的結果。
@@ -249,7 +253,7 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 - [x] 遊戲迴圈 + 玩家移動（輸入 → tick → 快照）
 - [x] 客戶端插值、預測 / 校正與相機跟隨
 - [x] 敵人生成、追蹤、碰撞扣血、Game Over
-- [ ] 自動攻擊武器、敵人死亡、經驗寶石
+- [x] 自動攻擊武器、敵人死亡、經驗寶石
 - [ ] 升級系統（三選一）
 - [ ] 更多武器 / 被動、隨時間增強的波次
 - [ ] 效能優化（空間格子、快照壓縮）
