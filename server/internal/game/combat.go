@@ -153,17 +153,18 @@ func (w *World) moveEnemies(players []*Player, dt float64) {
 
 // separateEnemies 把重疊的敵人互相推開（各推一半）。每個 tick 只做一輪，
 // 不保證完全不重疊，但足以讓一大群敵人散開成一團而不是疊成一點。
-// 目前是 O(n²)，n ≤ 300 時一個 tick 約 4.5 萬次距離計算；#10 會換成空間格子。
+// 用空間格子只檢查附近的敵人（#10 之前是 O(n²) 兩兩比對）；每一對只處理一次（b.ID > a.ID）。
 func (w *World) separateEnemies() {
-	for i := range w.enemies {
-		a := w.enemies[i]
-		for j := i + 1; j < len(w.enemies); j++ {
-			b := w.enemies[j]
+	for _, a := range w.enemies {
+		w.grid.query(a.Pos, a.Radius+w.grid.maxRadius, func(b *Enemy) bool {
+			if b.ID <= a.ID {
+				return true
+			}
 			minD := a.Radius + b.Radius
 			dx, dy := b.Pos.X-a.Pos.X, b.Pos.Y-a.Pos.Y
 			d := math.Hypot(dx, dy)
 			if d >= minD {
-				continue
+				return true
 			}
 			var nx, ny float64
 			if d < 1e-9 {
@@ -176,7 +177,8 @@ func (w *World) separateEnemies() {
 			push := (minD - d) / 2
 			a.Pos = Vec2{a.Pos.X - nx*push, a.Pos.Y - ny*push}
 			b.Pos = Vec2{b.Pos.X + nx*push, b.Pos.Y + ny*push}
-		}
+			return true
+		})
 	}
 	for _, e := range w.enemies {
 		e.Pos = w.clampToWorld(e.Pos, e.Radius)
@@ -211,11 +213,10 @@ func (w *World) applyContactDamage(players []*Player) []Death {
 // contactDamage 回傳碰到 pos 的敵人中最高的傷害（被巨漢和普通敵人同時撞到時算巨漢的）；沒碰到回傳 0。
 func (w *World) contactDamage(pos Vec2) int {
 	best := 0
-	for _, e := range w.enemies {
-		if e.HP > 0 && dist(e.Pos, pos) < w.cfg.PlayerRadius+e.Radius {
-			best = max(best, e.Damage)
-		}
-	}
+	w.enemiesNear(pos, w.cfg.PlayerRadius, func(e *Enemy) bool {
+		best = max(best, e.Damage)
+		return true
+	})
 	return best
 }
 

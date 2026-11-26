@@ -128,11 +128,10 @@ func (a *Aura) Update(w *World, owner *Player, dt float64) {
 	if a.timer > timeEps {
 		return
 	}
-	for _, e := range w.enemies {
-		if e.HP > 0 && dist(e.Pos, owner.Pos) < a.cfg.Radius+e.Radius {
-			w.damageEnemy(e, a.cfg.Damage, owner.ID, a.Name())
-		}
-	}
+	w.enemiesNear(owner.Pos, a.cfg.Radius, func(e *Enemy) bool {
+		w.damageEnemy(e, a.cfg.Damage, owner.ID, a.Name())
+		return true
+	})
 	a.timer = a.cfg.Interval
 }
 
@@ -179,16 +178,14 @@ func (o *Orbit) BladePositions(center Vec2, t float64) []Vec2 {
 func (o *Orbit) Update(w *World, owner *Player, _ float64) {
 	t := w.Time()
 	for _, b := range o.BladePositions(owner.Pos, t) {
-		for _, e := range w.enemies {
-			if e.HP <= 0 || dist(e.Pos, b) >= o.cfg.BladeRadius+e.Radius {
-				continue
-			}
+		w.enemiesNear(b, o.cfg.BladeRadius, func(e *Enemy) bool {
 			if last, ok := o.lastHit[e.ID]; ok && t-last < o.cfg.HitInterval-timeEps {
-				continue
+				return true
 			}
 			o.lastHit[e.ID] = t
 			w.damageEnemy(e, o.cfg.Damage, owner.ID, o.Name())
-		}
+			return true
+		})
 	}
 	// 清掉已經不在的敵人，避免 map 無限成長。
 	if len(o.lastHit) > 2*len(w.enemies)+16 {
@@ -222,14 +219,12 @@ func (w *World) nearestEnemies(pos Vec2, maxDist float64, n int) []*Enemy {
 		d float64
 	}
 	var cs []cand
-	for _, e := range w.enemies {
-		if e.HP <= 0 {
-			continue
-		}
-		if d := dist(e.Pos, pos); d <= maxDist {
+	w.grid.query(pos, maxDist, func(e *Enemy) bool {
+		if d := dist(e.Pos, pos); e.HP > 0 && d <= maxDist {
 			cs = append(cs, cand{e, d})
 		}
-	}
+		return true
+	})
 	// n 很小（≤ 4），部分選擇排序就夠了。
 	out := make([]*Enemy, 0, min(n, len(cs)))
 	for k := 0; k < n && k < len(cs); k++ {
@@ -280,17 +275,17 @@ func (w *World) updateProjectiles(dt float64) {
 		p.TTL -= dt
 
 		spent := false
-		for _, e := range w.enemies {
-			if e.HP <= 0 || dist(e.Pos, p.Pos) >= p.Radius+e.Radius || slices.Contains(p.hit, e.ID) {
-				continue
+		w.enemiesNear(p.Pos, p.Radius, func(e *Enemy) bool {
+			if slices.Contains(p.hit, e.ID) {
+				return true
 			}
 			w.damageEnemy(e, p.Damage, p.Owner, p.Source)
 			p.hit = append(p.hit, e.ID) // 同一發不會打同一隻兩次
 			if len(p.hit) > p.Pierce {
 				spent = true
 			}
-			break // 每個 tick 最多命中一隻，穿透的投射物下一個 tick 繼續
-		}
+			return false // 每個 tick 最多命中一隻，穿透的投射物下一個 tick 繼續
+		})
 
 		outside := p.Pos.X < 0 || p.Pos.Y < 0 || p.Pos.X > w.cfg.Width || p.Pos.Y > w.cfg.Height
 		if !spent && p.TTL > timeEps && !outside {

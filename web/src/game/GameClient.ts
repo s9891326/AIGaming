@@ -15,6 +15,10 @@ export interface JoinInfo {
   enemyRadius: number
   projectileRadius: number
   gemRadius: number
+  /** 各種敵人的半徑（key 是 EnemyKind）。快照中的敵人只帶種類。 */
+  enemyKindRadius: Record<number, number>
+  /** 敵人 / 投射物 / 寶石座標的量化倍率：座標 = q ÷ positionScale。 */
+  positionScale: number
 }
 
 /** 自己的成長數據（來自最新快照，不預測）。 */
@@ -113,7 +117,7 @@ export class GameClient {
   /** 每位玩家的狀態旗標（來自最新快照）。 */
   private flags = new Map<number, { choosing: boolean; auraRadius: number; orbit?: OrbitInfo }>()
   /** 敵人的種類與半徑（生成後不變）。 */
-  private enemyInfo = new Map<number, { kind: number; radius: number }>()
+  private enemyKind = new Map<number, number>()
   private gemValues = new Map<number, number>()
   /** 升級選單開著（本地）。選完後還要等快照確認 choosing=false 才恢復送輸入。 */
   private offerOpen = false
@@ -204,7 +208,7 @@ export class GameClient {
         },
       ]),
     )
-    this.enemyInfo = new Map(snap.enemies.map((e) => [e.id, { kind: e.kind, radius: e.radius }]))
+    this.enemyKind = new Map(snap.enemies.map((e) => [e.id, e.kind]))
     this.gemValues = new Map(snap.gems.map((g) => [g.id, g.value]))
     for (const p of snap.players) {
       this.health.observe(p.id, p.hp, p.maxHp, now)
@@ -223,18 +227,18 @@ export class GameClient {
         others.set(p.id, { x: p.x, y: p.y })
       }
     }
-    for (const e of snap.enemies) this.enemyHealth.observe(e.id, e.hp, e.maxHp, now)
+    // 敵人的血量只送「已損失的百分比」（滿血時不送），換算成 0～100 的血量追蹤。
+    for (const e of snap.enemies) this.enemyHealth.observe(e.id, 100 - e.damagePct, 100, now)
     this.enemyHealth.retain(new Set(snap.enemies.map((e) => e.id)))
-    const positions = (list: readonly { id: number; x: number; y: number }[]) =>
-      new Map(list.map((o) => [o.id, { x: o.x, y: o.y }]))
+    // 敵人 / 投射物 / 寶石的座標是量化後的整數（AOI 外的實體不會出現在快照中）。
+    const scale = this.join.positionScale || 1
+    const positions = (list: readonly { id: number; qx: number; qy: number }[]) =>
+      new Map(list.map((o) => [o.id, { x: o.qx / scale, y: o.qy / scale }]))
     this.projectileBuffer.push({ time, entities: positions(snap.projectiles) })
     this.gemBuffer.push({ time, entities: positions(snap.gems) })
     this.health.retain(new Set(snap.players.map((p) => p.id)))
     this.buffer.push({ time, entities: others })
-    this.enemyBuffer.push({
-      time,
-      entities: new Map(snap.enemies.map((e) => [e.id, { x: e.x, y: e.y }])),
-    })
+    this.enemyBuffer.push({ time, entities: positions(snap.enemies) })
 
     if (!self) return
     const before = this.predictor.pos
@@ -340,14 +344,14 @@ export class GameClient {
       // 其他人與敵人是插值的「過去」位置，旋刃角度也用同一個時間。
       for (const [id, p] of this.buffer.sample(renderTime)) others.push(player(id, p, renderTime))
       for (const [id, p] of this.enemyBuffer.sample(renderTime)) {
-        const info = this.enemyInfo.get(id)
+        const kind = this.enemyKind.get(id) ?? 1
         const h = this.enemyHealth.get(id)
         enemies.push({
           id,
           pos: p,
           hurt: this.enemyHealth.isHurt(id, now),
-          kind: info?.kind ?? 1,
-          radius: info?.radius ?? this.join?.enemyRadius ?? 14,
+          kind,
+          radius: this.join?.enemyKindRadius[kind] ?? this.join?.enemyRadius ?? 14,
           hp: h?.hp ?? 0,
           maxHp: h?.maxHp ?? 0,
         })
@@ -386,7 +390,7 @@ export class GameClient {
     this.enemyHealth.clear()
     this.progress = undefined
     this.flags = new Map()
-    this.enemyInfo = new Map()
+    this.enemyKind = new Map()
     this.gemValues = new Map()
     this.offerOpen = false
     this.selfChoosing = false
