@@ -1,6 +1,7 @@
 import { create, toJson, type JsonValue } from '@bufbuild/protobuf'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  ChooseUpgradeSchema,
   ClientMessageSchema,
   JoinRequestSchema,
   PingSchema,
@@ -37,6 +38,19 @@ export interface GameSocketOptions {
   simulatedLagMs?: number
 }
 
+export interface UpgradeChoice {
+  id: string
+  title: string
+  description: string
+  rank: number
+}
+
+export interface LevelUpInfo {
+  offerId: number
+  level: number
+  options: UpgradeChoice[]
+}
+
 export interface GameOverInfo {
   survivedMs: number
   kills: number
@@ -59,6 +73,10 @@ export interface GameSocketState {
   gameOver?: GameOverInfo
   /** 再來一局：重新送 JoinRequest，以新角色加入。 */
   rejoin(): void
+  /** 目前待選的升級選單；選完或斷線時清空。 */
+  levelUp?: LevelUpInfo
+  /** 選擇升級（0 起算）。 */
+  chooseUpgrade(index: number): void
   /**
    * 客戶端遊戲狀態（預測、插值）。不放進 React state：
    * 每秒數十次的更新由 GameCanvas 在 requestAnimationFrame 裡直接讀取。
@@ -88,11 +106,14 @@ export function useGameSocket({
   const [rttAvg, setRttAvg] = useState<number>()
   const [join, setJoin] = useState<JoinInfo>()
   const [gameOver, setGameOver] = useState<GameOverInfo>()
+  const [levelUp, setLevelUp] = useState<LevelUpInfo>()
   const [log, setLog] = useState<MessageLogEntry[]>([])
   const samples = useRef<number[]>([])
   const nextLogId = useRef(0)
   /** 目前連線的「送出 JoinRequest」函式，給 rejoin 使用（只在事件處理中讀取）。 */
   const sendJoinRef = useRef<(() => void) | null>(null)
+  /** 目前連線的「送出 ChooseUpgrade」函式。 */
+  const sendChooseRef = useRef<((offerId: number, index: number) => void) | null>(null)
 
   // GameClient 只建立一次，跨重連保留；送出輸入的函式在連線建立時接上。
   const [game] = useState(() => new GameClient())
@@ -141,6 +162,7 @@ export function useGameSocket({
             setRttAvg(undefined)
             setJoin(undefined)
             setGameOver(undefined)
+            setLevelUp(undefined)
             game.reset()
             game.setRtt(undefined)
             samples.current = []
@@ -177,10 +199,26 @@ export function useGameSocket({
               setGameOver(undefined)
               break
             }
+            case 'levelUpOffer': {
+              const v = msg.payload.value
+              game.setOfferOpen(true)
+              setLevelUp({
+                offerId: v.offerId,
+                level: v.level,
+                options: v.options.map((o) => ({
+                  id: o.id,
+                  title: o.title,
+                  description: o.description,
+                  rank: o.rank,
+                })),
+              })
+              break
+            }
             case 'gameOver':
               // 角色已被伺服器移除，不會再收到快照；清掉預測 / 插值狀態，等玩家按「再來一局」。
               game.reset()
               setJoin(undefined)
+              setLevelUp(undefined)
               setGameOver({
                 survivedMs: msg.payload.value.survivedMs,
                 kills: msg.payload.value.kills,
@@ -212,6 +250,16 @@ export function useGameSocket({
       )
     }
     sendJoinRef.current = sendJoin
+    sendChooseRef.current = (offerId, index) => {
+      socket.send(
+        create(ClientMessageSchema, {
+          payload: {
+            case: 'chooseUpgrade',
+            value: create(ChooseUpgradeSchema, { offerId, optionIndex: index }),
+          },
+        }),
+      )
+    }
     const detachSender = game.attachSender((seq, x, y) => {
       socket.send(
         create(ClientMessageSchema, {
@@ -236,11 +284,23 @@ export function useGameSocket({
       clearInterval(ping)
       detachSender()
       if (sendJoinRef.current === sendJoin) sendJoinRef.current = null
+      sendChooseRef.current = null
       socket.close()
     }
   }, [url, recordLog, simulatedLagMs, game])
 
   const rejoin = useCallback(() => sendJoinRef.current?.(), [])
+  const chooseUpgrade = useCallback(
+    (index: number) => {
+      if (!levelUp) return
+      sendChooseRef.current?.(levelUp.offerId, index)
+      // 先關掉選單；GameClient 仍會等快照確認選完才恢復送輸入。
+      // 選擇不合法時伺服器會重送選單，畫面就會再出現。
+      setLevelUp(undefined)
+      game.setOfferOpen(false)
+    },
+    [levelUp, game],
+  )
 
   return {
     status,
@@ -253,6 +313,8 @@ export function useGameSocket({
     join,
     gameOver,
     rejoin,
+    levelUp,
+    chooseUpgrade,
     game,
     log,
     clearLog: () => setLog([]),

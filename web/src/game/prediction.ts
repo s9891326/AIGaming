@@ -21,10 +21,22 @@ export class Predictor {
   /** 預測的本地玩家位置；收到第一個含自己的快照前為 null。 */
   pos: Vec | null = null
   private pending: PendingInput[] = []
-  private readonly cfg: SimConfig
+  private cfg: SimConfig
 
   constructor(cfg: SimConfig) {
     this.cfg = cfg
+  }
+
+  /**
+   * 更新移動速度（升級「疾行」後由快照告知）。只在沒有待確認輸入時呼叫才安全：
+   * 客戶端在選升級期間不送輸入，所以速度改變時 pending 一定是空的。
+   */
+  setSpeed(speed: number): void {
+    if (speed > 0 && speed !== this.cfg.playerSpeed) this.cfg = { ...this.cfg, playerSpeed: speed }
+  }
+
+  get speed(): number {
+    return this.cfg.playerSpeed
   }
 
   get pendingCount(): number {

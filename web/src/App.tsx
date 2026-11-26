@@ -3,6 +3,7 @@ import { ConnectionCard } from './components/ConnectionCard'
 import { DebugPanel } from './components/DebugPanel'
 import { GameOverOverlay } from './components/GameOverOverlay'
 import { HealthCard } from './components/HealthCard'
+import { LevelUpMenu } from './components/LevelUpMenu'
 import { GameCanvas } from './game/GameCanvas'
 import { useKeyboardMove } from './game/useKeyboardMove'
 import { lagFromLocation } from './net/GameSocket'
@@ -52,6 +53,9 @@ function App() {
         <GameCanvas game={game} overlay={overlay} simulatedLagMs={simulatedLagMs} />
         {socket.gameOver && socket.status === 'open' && (
           <GameOverOverlay result={socket.gameOver} onRestart={socket.rejoin} />
+        )}
+        {socket.levelUp && socket.status === 'open' && (
+          <LevelUpMenu offer={socket.levelUp} onChoose={socket.chooseUpgrade} />
         )}
       </div>
 
