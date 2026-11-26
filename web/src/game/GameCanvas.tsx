@@ -34,6 +34,8 @@ const COLORS = {
   gem: '#5ad1e6',
   gemEdge: '#2b8fa3',
   xp: '#5ad1e6',
+  aura: 'rgba(255, 211, 107, 0.12)',
+  auraEdge: 'rgba(255, 211, 107, 0.45)',
 }
 
 /**
@@ -124,6 +126,18 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         ctx.fill()
       }
       ctx.shadowBlur = 0
+
+      // 聖光環：畫在角色底下的半透明圓
+      for (const p of [...v.others, ...(v.self ? [v.self] : [])]) {
+        if (p.auraRadius <= 0) continue
+        ctx.fillStyle = COLORS.aura
+        ctx.strokeStyle = COLORS.auraEdge
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.arc(p.pos.x, p.pos.y, p.auraRadius, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+      }
 
       ctx.font = '12px system-ui, sans-serif'
       ctx.textAlign = 'center'
@@ -285,5 +299,5 @@ function drawPlayer(
   }
 
   ctx.fillStyle = COLORS.text
-  ctx.fillText(label, p.pos.x, p.pos.y - r - 16)
+  ctx.fillText(p.choosing ? `${label}（選升級中）` : label, p.pos.x, p.pos.y - r - 16)
 }

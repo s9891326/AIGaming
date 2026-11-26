@@ -33,6 +33,10 @@ export interface RenderPlayer {
   maxHp: number
   /** 剛受傷（畫受傷閃爍）。 */
   hurt: boolean
+  /** 正在選升級（被凍結）。 */
+  choosing: boolean
+  /** 聖光環半徑，0 = 沒有。 */
+  auraRadius: number
 }
 
 export interface RenderView {
@@ -83,6 +87,11 @@ export class GameClient {
   /** 敵人與玩家的 ID 是不同的編號空間，所以血量分開追蹤。 */
   private readonly enemyHealth = new HealthTracker()
   private progress?: PlayerProgress
+  /** 每位玩家的狀態旗標（來自最新快照）。 */
+  private flags = new Map<number, { choosing: boolean; auraRadius: number }>()
+  /** 升級選單開著（本地）。選完後還要等快照確認 choosing=false 才恢復送輸入。 */
+  private offerOpen = false
+  private selfChoosing = false
   private readonly clock = new ServerClock()
   private readonly health = new HealthTracker()
 
@@ -108,6 +117,16 @@ export class GameClient {
     return () => {
       if (this.sendInput === send) this.sendInput = undefined
     }
+  }
+
+  /** 升級選單開啟 / 關閉。開啟期間不產生輸入（伺服器也會拒絕）。 */
+  setOfferOpen(open: boolean): void {
+    this.offerOpen = open
+  }
+
+  /** 是否暫停產生輸入：選單開著，或伺服器還認為自己在選。 */
+  get paused(): boolean {
+    return this.offerOpen || this.selfChoosing
   }
 
   /** 最新的往返延遲（顯示在 HUD）。 */
@@ -141,11 +160,16 @@ export class GameClient {
 
     const others = new Map<number, Vec>()
     let self: { x: number; y: number; lastInputSeq: number } | undefined
+    this.flags = new Map(
+      snap.players.map((p) => [p.id, { choosing: p.choosing, auraRadius: p.auraRadius }]),
+    )
     for (const p of snap.players) {
       this.health.observe(p.id, p.hp, p.maxHp, now)
       if (p.id === this.join.playerId) {
         self = p
         this.progress = { level: p.level, xp: p.xp, xpToNext: p.xpToNext, kills: p.kills }
+        this.selfChoosing = p.choosing
+        this.predictor.setSpeed(p.speed)
       } else {
         others.set(p.id, { x: p.x, y: p.y })
       }
@@ -187,7 +211,7 @@ export class GameClient {
 
   /** 推進輸入 tick（每幀呼叫）：累積經過的時間，每滿一個 tick 產生一筆輸入。 */
   update(now: number): void {
-    if (!this.predictor?.pos) {
+    if (!this.predictor?.pos || this.paused) {
       this.lastStepAt = now
       return
     }
@@ -221,7 +245,16 @@ export class GameClient {
 
     const player = (id: number, pos: Vec): RenderPlayer => {
       const h = this.health.get(id)
-      return { id, pos, hp: h?.hp ?? 0, maxHp: h?.maxHp ?? 0, hurt: this.health.isHurt(id, now) }
+      const f = this.flags.get(id)
+      return {
+        id,
+        pos,
+        hp: h?.hp ?? 0,
+        maxHp: h?.maxHp ?? 0,
+        hurt: this.health.isHurt(id, now),
+        choosing: f?.choosing ?? false,
+        auraRadius: f?.auraRadius ?? 0,
+      }
     }
 
     let self: RenderPlayer | undefined
@@ -277,6 +310,9 @@ export class GameClient {
     this.gemBuffer.clear()
     this.enemyHealth.clear()
     this.progress = undefined
+    this.flags = new Map()
+    this.offerOpen = false
+    this.selfChoosing = false
     this.clock.reset()
     this.health.clear()
     this.seq = 0

@@ -285,3 +285,72 @@ func TestSnapshotIncludesProjectilesGemsAndKills(t *testing.T) {
 		t.Fatalf("gem value = %d, want 1", g.GetValue())
 	}
 }
+
+func TestLevelUpOfferAndChooseThroughLoop(t *testing.T) {
+	cfg := LoopConfig{TickRate: 100, World: WorldConfig{
+		Width: 3000, Height: 2000, PlayerSpeed: 100, PlayerRadius: 10,
+		Combat: CombatConfig{PlayerMaxHP: 100, SpawnProtection: 100},
+		Loot:   DefaultLootConfig,
+	}}
+	l := NewLoop(slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	go l.Run(ctx)
+	t.Cleanup(func() { cancel(); <-l.done })
+
+	sink := &fakeSink{}
+	l.Join("conn-a", sink)
+	eventually(t, "joined", func() bool { return len(sink.all()) > 0 })
+	// 直接在 Loop goroutine 上給經驗（模擬撿到 5 顆寶石）。
+	l.enqueue(func(l *Loop) {
+		l.world.addXP(l.world.Player(PlayerID(sink.all()[0].GetJoinAccepted().GetPlayerId())), 5)
+	})
+
+	offerCount := func() (n int, last *gamev1.LevelUpOffer) {
+		for _, m := range sink.all() {
+			if o := m.GetLevelUpOffer(); o != nil {
+				n, last = n+1, o
+			}
+		}
+		return
+	}
+	eventually(t, "LevelUpOffer", func() bool { n, _ := offerCount(); return n == 1 })
+	_, offer := offerCount()
+	if offer.GetLevel() != 2 || len(offer.GetOptions()) != 3 {
+		t.Fatalf("offer = %v, want level 2 with 3 options", offer)
+	}
+	// 快照可能還沒到（race 模式比較慢），所以要先檢查有沒有玩家。
+	self := func() *gamev1.PlayerState {
+		if ps := sink.lastSnapshot().GetPlayers(); len(ps) > 0 {
+			return ps[0]
+		}
+		return nil
+	}
+	eventually(t, "snapshot says choosing", func() bool {
+		return self().GetChoosing()
+	})
+
+	// 不合法：index 超出範圍 → 伺服器重送同一份選單。
+	l.Choose("conn-a", offer.GetOfferId(), 7)
+	eventually(t, "offer re-sent", func() bool { n, _ := offerCount(); return n == 2 })
+	if _, again := offerCount(); again.GetOfferId() != offer.GetOfferId() {
+		t.Fatalf("re-sent offer id %d, want %d", again.GetOfferId(), offer.GetOfferId())
+	}
+
+	// 合法：選「疾行」（如果有的話）或第一個。
+	idx := 0
+	for i, op := range offer.GetOptions() {
+		if op.GetId() == "move_speed" {
+			idx = i
+		}
+	}
+	l.Choose("conn-a", offer.GetOfferId(), idx)
+	eventually(t, "resumed", func() bool {
+		p := self()
+		return p != nil && !p.GetChoosing()
+	})
+	if offer.GetOptions()[idx].GetId() == "move_speed" {
+		eventually(t, "speed updated", func() bool {
+			return self().GetSpeed() > 100
+		})
+	}
+}

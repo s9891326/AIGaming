@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/game.proto.
  */
 export const file_game_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCLiAQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SAASJgoJZ2FtZV9vdmVyGAUgASgLMhEuZ2FtZS52MS5HYW1lT3ZlckgAQgkKB3BheWxvYWQiOAoHV2VsY29tZRIVCg1jb25uZWN0aW9uX2lkGAEgASgJEhYKDnNlcnZlcl92ZXJzaW9uGAIgASgJIh4KBFBpbmcSFgoOY2xpZW50X3RpbWVfbXMYASABKAEiNgoEUG9uZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoARIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoASINCgtKb2luUmVxdWVzdCLRAQoMSm9pbkFjY2VwdGVkEhEKCXBsYXllcl9pZBgBIAEoDRITCgt3b3JsZF93aWR0aBgCIAEoAhIUCgx3b3JsZF9oZWlnaHQYAyABKAISEQoJdGlja19yYXRlGAQgASgNEhUKDXBsYXllcl9yYWRpdXMYBSABKAISFAoMcGxheWVyX3NwZWVkGAYgASgCEhQKDGVuZW15X3JhZGl1cxgHIAEoAhIZChFwcm9qZWN0aWxlX3JhZGl1cxgIIAEoAhISCgpnZW1fcmFkaXVzGAkgASgCIjoKC1BsYXllcklucHV0EgsKA3NlcRgBIAEoDRIOCgZtb3ZlX3gYAiABKAISDgoGbW92ZV95GAMgASgCItIBCg1Xb3JsZFNuYXBzaG90EgwKBHRpY2sYASABKA0SFgoOc2VydmVyX3RpbWVfbXMYAiABKAESJQoHcGxheWVycxgDIAMoCzIULmdhbWUudjEuUGxheWVyU3RhdGUSJAoHZW5lbWllcxgEIAMoCzITLmdhbWUudjEuRW5lbXlTdGF0ZRItCgtwcm9qZWN0aWxlcxgFIAMoCzIYLmdhbWUudjEuUHJvamVjdGlsZVN0YXRlEh8KBGdlbXMYBiADKAsyES5nYW1lLnYxLkdlbVN0YXRlIqEBCgtQbGF5ZXJTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISFgoObGFzdF9pbnB1dF9zZXEYBCABKA0SCgoCaHAYBSABKA0SDgoGbWF4X2hwGAYgASgNEgoKAnhwGAcgASgNEhIKCnhwX3RvX25leHQYCCABKA0SDQoFbGV2ZWwYCSABKA0SDQoFa2lsbHMYCiABKA0iSgoKRW5lbXlTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISCgoCaHAYBCABKA0SDgoGbWF4X2hwGAUgASgNIjMKD1Byb2plY3RpbGVTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAIiOwoIR2VtU3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF5GAMgASgCEg0KBXZhbHVlGAQgASgNIi4KCEdhbWVPdmVyEhMKC3N1cnZpdmVkX21zGAEgASgNEg0KBWtpbGxzGAIgASgNQixaKmFpZ2FtaW5nL3NlcnZlci9pbnRlcm5hbC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z");
+  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEiuAEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SAASMAoOY2hvb3NlX3VwZ3JhZGUYBCABKAsyFi5nYW1lLnYxLkNob29zZVVwZ3JhZGVIAEIJCgdwYXlsb2FkIpMCCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5nYW1lLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0uZ2FtZS52MS5Qb25nSAASLgoNam9pbl9hY2NlcHRlZBgDIAEoCzIVLmdhbWUudjEuSm9pbkFjY2VwdGVkSAASKgoIc25hcHNob3QYBCABKAsyFi5nYW1lLnYxLldvcmxkU25hcHNob3RIABImCglnYW1lX292ZXIYBSABKAsyES5nYW1lLnYxLkdhbWVPdmVySAASLwoObGV2ZWxfdXBfb2ZmZXIYBiABKAsyFS5nYW1lLnYxLkxldmVsVXBPZmZlckgAQgkKB3BheWxvYWQiOAoHV2VsY29tZRIVCg1jb25uZWN0aW9uX2lkGAEgASgJEhYKDnNlcnZlcl92ZXJzaW9uGAIgASgJIh4KBFBpbmcSFgoOY2xpZW50X3RpbWVfbXMYASABKAEiNgoEUG9uZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoARIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoASINCgtKb2luUmVxdWVzdCLRAQoMSm9pbkFjY2VwdGVkEhEKCXBsYXllcl9pZBgBIAEoDRITCgt3b3JsZF93aWR0aBgCIAEoAhIUCgx3b3JsZF9oZWlnaHQYAyABKAISEQoJdGlja19yYXRlGAQgASgNEhUKDXBsYXllcl9yYWRpdXMYBSABKAISFAoMcGxheWVyX3NwZWVkGAYgASgCEhQKDGVuZW15X3JhZGl1cxgHIAEoAhIZChFwcm9qZWN0aWxlX3JhZGl1cxgIIAEoAhISCgpnZW1fcmFkaXVzGAkgASgCIjoKC1BsYXllcklucHV0EgsKA3NlcRgBIAEoDRIOCgZtb3ZlX3gYAiABKAISDgoGbW92ZV95GAMgASgCItIBCg1Xb3JsZFNuYXBzaG90EgwKBHRpY2sYASABKA0SFgoOc2VydmVyX3RpbWVfbXMYAiABKAESJQoHcGxheWVycxgDIAMoCzIULmdhbWUudjEuUGxheWVyU3RhdGUSJAoHZW5lbWllcxgEIAMoCzITLmdhbWUudjEuRW5lbXlTdGF0ZRItCgtwcm9qZWN0aWxlcxgFIAMoCzIYLmdhbWUudjEuUHJvamVjdGlsZVN0YXRlEh8KBGdlbXMYBiADKAsyES5nYW1lLnYxLkdlbVN0YXRlItcBCgtQbGF5ZXJTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISFgoObGFzdF9pbnB1dF9zZXEYBCABKA0SCgoCaHAYBSABKA0SDgoGbWF4X2hwGAYgASgNEgoKAnhwGAcgASgNEhIKCnhwX3RvX25leHQYCCABKA0SDQoFbGV2ZWwYCSABKA0SDQoFa2lsbHMYCiABKA0SDQoFc3BlZWQYCyABKAISEAoIY2hvb3NpbmcYDCABKAgSEwoLYXVyYV9yYWRpdXMYDSABKAIiSgoKRW5lbXlTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAISCgoCaHAYBCABKA0SDgoGbWF4X2hwGAUgASgNIjMKD1Byb2plY3RpbGVTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXkYAyABKAIiOwoIR2VtU3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF5GAMgASgCEg0KBXZhbHVlGAQgASgNIi4KCEdhbWVPdmVyEhMKC3N1cnZpdmVkX21zGAEgASgNEg0KBWtpbGxzGAIgASgNIlgKDExldmVsVXBPZmZlchIQCghvZmZlcl9pZBgBIAEoDRINCgVsZXZlbBgCIAEoDRInCgdvcHRpb25zGAMgAygLMhYuZ2FtZS52MS5VcGdyYWRlT3B0aW9uIk0KDVVwZ3JhZGVPcHRpb24SCgoCaWQYASABKAkSDQoFdGl0bGUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAkSDAoEcmFuaxgEIAEoDSI3Cg1DaG9vc2VVcGdyYWRlEhAKCG9mZmVyX2lkGAEgASgNEhQKDG9wdGlvbl9pbmRleBgCIAEoDUIsWiphaWdhbWluZy9zZXJ2ZXIvaW50ZXJuYWwvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw");
 
 /**
  * ClientMessage 是客戶端送給伺服器的信封。
@@ -43,6 +43,12 @@ export type ClientMessage = Message<"game.v1.ClientMessage"> & {
      */
     value: PlayerInput;
     case: "input";
+  } | {
+    /**
+     * @generated from field: game.v1.ChooseUpgrade choose_upgrade = 4;
+     */
+    value: ChooseUpgrade;
+    case: "chooseUpgrade";
   } | { case: undefined; value?: undefined };
 };
 
@@ -92,6 +98,12 @@ export type ServerMessage = Message<"game.v1.ServerMessage"> & {
      */
     value: GameOver;
     case: "gameOver";
+  } | {
+    /**
+     * @generated from field: game.v1.LevelUpOffer level_up_offer = 6;
+     */
+    value: LevelUpOffer;
+    case: "levelUpOffer";
   } | { case: undefined; value?: undefined };
 };
 
@@ -418,6 +430,27 @@ export type PlayerState = Message<"game.v1.PlayerState"> & {
    * @generated from field: uint32 kills = 10;
    */
   kills: number;
+
+  /**
+   * 移動速度（單位 / 秒）。升級會改變，客戶端預測要用這個值。
+   *
+   * @generated from field: float speed = 11;
+   */
+  speed: number;
+
+  /**
+   * 正在選升級（被凍結：不能移動、不受傷）。
+   *
+   * @generated from field: bool choosing = 12;
+   */
+  choosing: boolean;
+
+  /**
+   * 聖光環的半徑，0 代表沒有這把武器（用於繪製）。
+   *
+   * @generated from field: float aura_radius = 13;
+   */
+  auraRadius: number;
 };
 
 /**
@@ -561,4 +594,104 @@ export type GameOver = Message<"game.v1.GameOver"> & {
  */
 export const GameOverSchema: GenMessage<GameOver> = /*@__PURE__*/
   messageDesc(file_game_v1_game, 13);
+
+/**
+ * LevelUpOffer 在玩家升級時送出：遊戲為他暫停（單人時整個世界暫停），等他選一個。
+ * 一次升好幾級時會排隊，選完一個才送下一份。
+ *
+ * @generated from message game.v1.LevelUpOffer
+ */
+export type LevelUpOffer = Message<"game.v1.LevelUpOffer"> & {
+  /**
+   * 這份選單的編號，回覆時原封不動帶回；用來擋掉過期或重複的選擇。
+   *
+   * @generated from field: uint32 offer_id = 1;
+   */
+  offerId: number;
+
+  /**
+   * 升上的等級。
+   *
+   * @generated from field: uint32 level = 2;
+   */
+  level: number;
+
+  /**
+   * @generated from field: repeated game.v1.UpgradeOption options = 3;
+   */
+  options: UpgradeOption[];
+};
+
+/**
+ * Describes the message game.v1.LevelUpOffer.
+ * Use `create(LevelUpOfferSchema)` to create a new message.
+ */
+export const LevelUpOfferSchema: GenMessage<LevelUpOffer> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 14);
+
+/**
+ * UpgradeOption 是一個升級選項。
+ *
+ * @generated from message game.v1.UpgradeOption
+ */
+export type UpgradeOption = Message<"game.v1.UpgradeOption"> & {
+  /**
+   * 選項種類，例如 "bolt_damage"、"aura_new"、"move_speed"。
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * 顯示用的標題與說明。
+   *
+   * @generated from field: string title = 2;
+   */
+  title: string;
+
+  /**
+   * @generated from field: string description = 3;
+   */
+  description: string;
+
+  /**
+   * 選了之後這個項目會變成第幾級（新武器為 1）。
+   *
+   * @generated from field: uint32 rank = 4;
+   */
+  rank: number;
+};
+
+/**
+ * Describes the message game.v1.UpgradeOption.
+ * Use `create(UpgradeOptionSchema)` to create a new message.
+ */
+export const UpgradeOptionSchema: GenMessage<UpgradeOption> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 15);
+
+/**
+ * ChooseUpgrade 回覆 LevelUpOffer。不合法（offer_id 不符、index 超出範圍）時伺服器拒絕並重送目前的選單。
+ *
+ * @generated from message game.v1.ChooseUpgrade
+ */
+export type ChooseUpgrade = Message<"game.v1.ChooseUpgrade"> & {
+  /**
+   * @generated from field: uint32 offer_id = 1;
+   */
+  offerId: number;
+
+  /**
+   * 選第幾個（0 起算）。
+   *
+   * @generated from field: uint32 option_index = 2;
+   */
+  optionIndex: number;
+};
+
+/**
+ * Describes the message game.v1.ChooseUpgrade.
+ * Use `create(ChooseUpgradeSchema)` to create a new message.
+ */
+export const ChooseUpgradeSchema: GenMessage<ChooseUpgrade> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 16);
 

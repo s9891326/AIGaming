@@ -67,7 +67,7 @@ func (w *World) updateGems(players []*Player, dt float64) {
 			continue
 		}
 		d := dist(p.Pos, g.Pos)
-		if d <= c.MagnetRadius && d > 1e-9 {
+		if d <= p.MagnetRadius && d > 1e-9 {
 			move := math.Min(c.MagnetSpeed*dt, d)
 			g.Pos = g.Pos.Add(Vec2{p.Pos.X - g.Pos.X, p.Pos.Y - g.Pos.Y}.Scale(move / d))
 			d -= move
@@ -83,11 +83,11 @@ func (w *World) updateGems(players []*Player, dt float64) {
 }
 
 // addXP 增加經驗值，滿了就升級（可以一次升好幾級），多出來的經驗保留到下一級。
-// 升級時的三選一在 #8 實作，這裡只計算等級。
 func (w *World) addXP(p *Player, amount int) {
 	p.XP += amount
 	for need := w.cfg.Loot.XPToNext(p.Level); need > 0 && p.XP >= need; need = w.cfg.Loot.XPToNext(p.Level) {
 		p.XP -= need
 		p.Level++
+		p.PendingLevelUps++ // 每升一級排一份三選一（upgrades.go）
 	}
 }

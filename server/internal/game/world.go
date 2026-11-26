@@ -72,7 +72,19 @@ type Player struct {
 	XP, Level  int
 	Weapons    []Weapon
 	spawnAccum float64 // 累積的生成量，滿 1 就在這位玩家附近生成一隻敵人
+
+	// 會被升級改變的個人數值。
+	Speed        float64 // 移動速度（單位 / 秒）
+	MagnetRadius float64 // 寶石吸取範圍
+
+	// 升級：PendingLevelUps 是還沒選的升級次數；Offer 不為 nil 代表正在選（被凍結）。
+	PendingLevelUps int
+	Offer           *Offer
+	Upgrades        map[string]int // 每種升級已選的次數
 }
+
+// Choosing 回傳玩家是否正在選升級（被凍結）。
+func (p *Player) Choosing() bool { return p.Offer != nil }
 
 // World 是整個遊戲世界的狀態。不是並行安全的：只能由一個 goroutine（Loop）存取。
 type World struct {
@@ -88,6 +100,7 @@ type World struct {
 	nextProjectileID ProjectileID
 	gems             []*Gem
 	nextGemID        GemID
+	nextOfferID      uint32
 
 	rng *rand.Rand // 生成位置等隨機性；測試可換成固定種子
 }
@@ -101,6 +114,7 @@ func NewWorld(cfg WorldConfig) *World {
 		nextEnemyID:      1,
 		nextProjectileID: 1,
 		nextGemID:        1,
+		nextOfferID:      1,
 		rng:              rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 	}
 }
@@ -120,14 +134,17 @@ func (w *World) AddPlayer() PlayerID {
 		weapons = w.cfg.StartingWeapons()
 	}
 	w.players[id] = &Player{
-		ID:          id,
-		Pos:         Vec2{w.cfg.Width / 2, w.cfg.Height / 2},
-		InputBudget: w.cfg.MaxInputBudget,
-		HP:          w.cfg.Combat.PlayerMaxHP,
-		MaxHP:       w.cfg.Combat.PlayerMaxHP,
-		Invuln:      w.cfg.Combat.SpawnProtection,
-		Level:       1,
-		Weapons:     weapons,
+		ID:           id,
+		Pos:          Vec2{w.cfg.Width / 2, w.cfg.Height / 2},
+		InputBudget:  w.cfg.MaxInputBudget,
+		HP:           w.cfg.Combat.PlayerMaxHP,
+		MaxHP:        w.cfg.Combat.PlayerMaxHP,
+		Invuln:       w.cfg.Combat.SpawnProtection,
+		Level:        1,
+		Weapons:      weapons,
+		Speed:        w.cfg.PlayerSpeed,
+		MagnetRadius: w.cfg.Loot.MagnetRadius,
+		Upgrades:     make(map[string]int),
 	}
 	return id
 }
@@ -146,6 +163,7 @@ const (
 	InputUnknown                // 角色不存在
 	InputStale                  // 序號不比上一筆新
 	InputOverBudget             // 超出時間預算（送太快）
+	InputFrozen                 // 正在選升級，不能移動
 )
 
 // ApplyInput 讓角色往 (x, y) 方向移動一個 InputDt。
@@ -155,6 +173,8 @@ func (w *World) ApplyInput(id PlayerID, seq uint32, x, y float64) InputResult {
 	switch {
 	case p == nil:
 		return InputUnknown
+	case p.Choosing():
+		return InputFrozen
 	case seq <= p.LastInputSeq:
 		return InputStale
 	case p.InputBudget+1e-9 < w.cfg.InputDt:
@@ -162,37 +182,62 @@ func (w *World) ApplyInput(id PlayerID, seq uint32, x, y float64) InputResult {
 	}
 	p.InputBudget -= w.cfg.InputDt
 	p.LastInputSeq = seq
-	p.Pos = MoveStep(p.Pos, NormalizeInput(x, y), w.cfg)
+	p.Pos = MoveStep(p.Pos, NormalizeInput(x, y), p.Speed, w.cfg)
 	return InputApplied
 }
 
-// Step 推進模擬 dt 秒，回傳這個 tick 死亡的玩家（已從世界移除）。
+// StepResult 是一個 tick 中發生、需要通知玩家的事件。
+type StepResult struct {
+	Deaths []Death      // 死亡的玩家（已從世界移除）
+	Offers []OfferEvent // 新的升級選單
+}
+
+// Step 推進模擬 dt 秒。
 //
 // 玩家的移動完全由 ApplyInput 驅動（客戶端可以用同樣的算法預測自己的位置）；
 // Step 負責時間相關的事，依序：輸入預算與無敵時間 → 敵人生成 / 移動 / 分離 →
-// 武器發射 → 投射物移動與命中（敵人死亡、掉寶石）→ 寶石吸取與經驗 → 接觸傷害。
-func (w *World) Step(dt float64) []Death {
+// 武器發射 → 投射物移動與命中（敵人死亡、掉寶石）→ 寶石吸取與經驗 → 接觸傷害 → 升級選單。
+//
+// 正在選升級的玩家被凍結，不參與模擬；所有人都在選時整個世界暫停（只有 tick 照常遞增，
+// 讓客戶端用 tick 估計的伺服器時間在恢復後仍然連續）。
+func (w *World) Step(dt float64) StepResult {
 	w.tick++
-	for _, p := range w.players {
-		p.InputBudget = math.Min(p.InputBudget+dt, w.cfg.MaxInputBudget)
-		p.Age += dt
-		p.Invuln = math.Max(0, p.Invuln-dt)
-	}
 	if len(w.players) == 0 {
 		// 沒有人在玩：清空敵人與掉落物，下一位加入的玩家從乾淨的世界開始。
 		w.enemies = w.enemies[:0]
 		w.projectiles = w.projectiles[:0]
 		w.gems = w.gems[:0]
-		return nil
+		return StepResult{}
 	}
-	players := w.sortedPlayers()
-	w.spawnEnemies(players, dt)
-	w.moveEnemies(players, dt)
+	active := w.activePlayers()
+	if len(active) == 0 {
+		return StepResult{} // 大家都在選升級：暫停
+	}
+	for _, p := range active {
+		p.InputBudget = math.Min(p.InputBudget+dt, w.cfg.MaxInputBudget)
+		p.Age += dt
+		p.Invuln = math.Max(0, p.Invuln-dt)
+	}
+	w.spawnEnemies(active, dt)
+	w.moveEnemies(active, dt)
 	w.separateEnemies()
-	w.updateWeapons(players, dt)
+	w.updateWeapons(active, dt)
 	w.updateProjectiles(dt) // 打死的敵人在接觸傷害之前就移除
-	w.updateGems(players, dt)
-	return w.applyContactDamage(players)
+	w.updateGems(active, dt)
+	deaths := w.applyContactDamage(active)
+	return StepResult{Deaths: deaths, Offers: w.makeOffers(active)}
+}
+
+// activePlayers 回傳沒有在選升級的玩家，依 ID 排序。
+func (w *World) activePlayers() []*Player {
+	all := w.sortedPlayers()
+	out := all[:0]
+	for _, p := range all {
+		if !p.Choosing() {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // sortedPlayers 依 ID 排序，讓亂數的使用順序固定（同樣的種子 → 同樣的結果，測試才穩定）。
@@ -217,8 +262,8 @@ func (w *World) Players() []Player {
 
 // MoveStep 是一筆輸入的移動規則：沿 dir 走 speed × InputDt，再把整個身體夾回世界內。
 // 前端 web/src/game/sim.ts 的 moveStep 必須與此一致，否則客戶端預測會一直被校正。
-func MoveStep(pos, dir Vec2, cfg WorldConfig) Vec2 {
-	next := pos.Add(dir.Scale(cfg.PlayerSpeed * cfg.InputDt))
+func MoveStep(pos, dir Vec2, speed float64, cfg WorldConfig) Vec2 {
+	next := pos.Add(dir.Scale(speed * cfg.InputDt))
 	r := cfg.PlayerRadius
 	return Vec2{
 		X: math.Min(math.Max(next.X, r), cfg.Width-r),

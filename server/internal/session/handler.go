@@ -17,6 +17,7 @@ type Game interface {
 	Join(key string, sink game.Sink)
 	Leave(key string)
 	Input(key string, seq uint32, x, y float64)
+	Choose(key string, offerID uint32, index int)
 }
 
 // Handler 實作 ws.Handler。
@@ -60,6 +61,10 @@ func (h *Handler) OnMessage(c *ws.Conn, msg *gamev1.ClientMessage) {
 		if h.game != nil {
 			in := p.Input
 			h.game.Input(c.ID(), in.GetSeq(), float64(in.GetMoveX()), float64(in.GetMoveY()))
+		}
+	case *gamev1.ClientMessage_ChooseUpgrade:
+		if h.game != nil {
+			h.game.Choose(c.ID(), p.ChooseUpgrade.GetOfferId(), int(p.ChooseUpgrade.GetOptionIndex()))
 		}
 	default:
 		h.log.Debug("unhandled client message", "conn", c.ID(), "type", fmt.Sprintf("%T", msg.Payload))
