@@ -13,6 +13,7 @@ message ClientMessage {
     Ping ping = 1;
     JoinRequest join = 2;
     PlayerInput input = 3;
+    ChooseUpgrade choose_upgrade = 4;
   }
 }
 
@@ -24,6 +25,7 @@ message ServerMessage {
     JoinAccepted join_accepted = 3;
     WorldSnapshot snapshot = 4;
     GameOver game_over = 5;
+    LevelUpOffer level_up_offer = 6;
   }
 }
 
@@ -115,6 +117,12 @@ message PlayerState {
   uint32 level = 9;
   // 擊殺數。
   uint32 kills = 10;
+  // 移動速度（單位 / 秒）。升級會改變，客戶端預測要用這個值。
+  float speed = 11;
+  // 正在選升級（被凍結：不能移動、不受傷）。
+  bool choosing = 12;
+  // 聖光環的半徑，0 代表沒有這把武器（用於繪製）。
+  float aura_radius = 13;
 }
 
 // EnemyState 是快照中單一敵人的狀態。
@@ -150,4 +158,32 @@ message GameOver {
   uint32 survived_ms = 1;
   // 擊殺數。
   uint32 kills = 2;
+}
+
+// LevelUpOffer 在玩家升級時送出：遊戲為他暫停（單人時整個世界暫停），等他選一個。
+// 一次升好幾級時會排隊，選完一個才送下一份。
+message LevelUpOffer {
+  // 這份選單的編號，回覆時原封不動帶回；用來擋掉過期或重複的選擇。
+  uint32 offer_id = 1;
+  // 升上的等級。
+  uint32 level = 2;
+  repeated UpgradeOption options = 3;
+}
+
+// UpgradeOption 是一個升級選項。
+message UpgradeOption {
+  // 選項種類，例如 "bolt_damage"、"aura_new"、"move_speed"。
+  string id = 1;
+  // 顯示用的標題與說明。
+  string title = 2;
+  string description = 3;
+  // 選了之後這個項目會變成第幾級（新武器為 1）。
+  uint32 rank = 4;
+}
+
+// ChooseUpgrade 回覆 LevelUpOffer。不合法（offer_id 不符、index 超出範圍）時伺服器拒絕並重送目前的選單。
+message ChooseUpgrade {
+  uint32 offer_id = 1;
+  // 選第幾個（0 起算）。
+  uint32 option_index = 2;
 }

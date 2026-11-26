@@ -33,6 +33,7 @@ type ClientMessage struct {
 	//	*ClientMessage_Ping
 	//	*ClientMessage_Join
 	//	*ClientMessage_Input
+	//	*ClientMessage_ChooseUpgrade
 	Payload       isClientMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -102,6 +103,15 @@ func (x *ClientMessage) GetInput() *PlayerInput {
 	return nil
 }
 
+func (x *ClientMessage) GetChooseUpgrade() *ChooseUpgrade {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientMessage_ChooseUpgrade); ok {
+			return x.ChooseUpgrade
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Payload interface {
 	isClientMessage_Payload()
 }
@@ -118,11 +128,17 @@ type ClientMessage_Input struct {
 	Input *PlayerInput `protobuf:"bytes,3,opt,name=input,proto3,oneof"`
 }
 
+type ClientMessage_ChooseUpgrade struct {
+	ChooseUpgrade *ChooseUpgrade `protobuf:"bytes,4,opt,name=choose_upgrade,json=chooseUpgrade,proto3,oneof"`
+}
+
 func (*ClientMessage_Ping) isClientMessage_Payload() {}
 
 func (*ClientMessage_Join) isClientMessage_Payload() {}
 
 func (*ClientMessage_Input) isClientMessage_Payload() {}
+
+func (*ClientMessage_ChooseUpgrade) isClientMessage_Payload() {}
 
 // ServerMessage 是伺服器送給客戶端的信封。
 type ServerMessage struct {
@@ -134,6 +150,7 @@ type ServerMessage struct {
 	//	*ServerMessage_JoinAccepted
 	//	*ServerMessage_Snapshot
 	//	*ServerMessage_GameOver
+	//	*ServerMessage_LevelUpOffer
 	Payload       isServerMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -221,6 +238,15 @@ func (x *ServerMessage) GetGameOver() *GameOver {
 	return nil
 }
 
+func (x *ServerMessage) GetLevelUpOffer() *LevelUpOffer {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerMessage_LevelUpOffer); ok {
+			return x.LevelUpOffer
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Payload interface {
 	isServerMessage_Payload()
 }
@@ -245,6 +271,10 @@ type ServerMessage_GameOver struct {
 	GameOver *GameOver `protobuf:"bytes,5,opt,name=game_over,json=gameOver,proto3,oneof"`
 }
 
+type ServerMessage_LevelUpOffer struct {
+	LevelUpOffer *LevelUpOffer `protobuf:"bytes,6,opt,name=level_up_offer,json=levelUpOffer,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Payload() {}
 
 func (*ServerMessage_Pong) isServerMessage_Payload() {}
@@ -254,6 +284,8 @@ func (*ServerMessage_JoinAccepted) isServerMessage_Payload() {}
 func (*ServerMessage_Snapshot) isServerMessage_Payload() {}
 
 func (*ServerMessage_GameOver) isServerMessage_Payload() {}
+
+func (*ServerMessage_LevelUpOffer) isServerMessage_Payload() {}
 
 // Welcome 在連線建立後由伺服器立即送出。
 type Welcome struct {
@@ -736,7 +768,13 @@ type PlayerState struct {
 	XpToNext uint32 `protobuf:"varint,8,opt,name=xp_to_next,json=xpToNext,proto3" json:"xp_to_next,omitempty"`
 	Level    uint32 `protobuf:"varint,9,opt,name=level,proto3" json:"level,omitempty"`
 	// 擊殺數。
-	Kills         uint32 `protobuf:"varint,10,opt,name=kills,proto3" json:"kills,omitempty"`
+	Kills uint32 `protobuf:"varint,10,opt,name=kills,proto3" json:"kills,omitempty"`
+	// 移動速度（單位 / 秒）。升級會改變，客戶端預測要用這個值。
+	Speed float32 `protobuf:"fixed32,11,opt,name=speed,proto3" json:"speed,omitempty"`
+	// 正在選升級（被凍結：不能移動、不受傷）。
+	Choosing bool `protobuf:"varint,12,opt,name=choosing,proto3" json:"choosing,omitempty"`
+	// 聖光環的半徑，0 代表沒有這把武器（用於繪製）。
+	AuraRadius    float32 `protobuf:"fixed32,13,opt,name=aura_radius,json=auraRadius,proto3" json:"aura_radius,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -837,6 +875,27 @@ func (x *PlayerState) GetLevel() uint32 {
 func (x *PlayerState) GetKills() uint32 {
 	if x != nil {
 		return x.Kills
+	}
+	return 0
+}
+
+func (x *PlayerState) GetSpeed() float32 {
+	if x != nil {
+		return x.Speed
+	}
+	return 0
+}
+
+func (x *PlayerState) GetChoosing() bool {
+	if x != nil {
+		return x.Choosing
+	}
+	return false
+}
+
+func (x *PlayerState) GetAuraRadius() float32 {
+	if x != nil {
+		return x.AuraRadius
 	}
 	return 0
 }
@@ -1106,22 +1165,214 @@ func (x *GameOver) GetKills() uint32 {
 	return 0
 }
 
+// LevelUpOffer 在玩家升級時送出：遊戲為他暫停（單人時整個世界暫停），等他選一個。
+// 一次升好幾級時會排隊，選完一個才送下一份。
+type LevelUpOffer struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 這份選單的編號，回覆時原封不動帶回；用來擋掉過期或重複的選擇。
+	OfferId uint32 `protobuf:"varint,1,opt,name=offer_id,json=offerId,proto3" json:"offer_id,omitempty"`
+	// 升上的等級。
+	Level         uint32           `protobuf:"varint,2,opt,name=level,proto3" json:"level,omitempty"`
+	Options       []*UpgradeOption `protobuf:"bytes,3,rep,name=options,proto3" json:"options,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LevelUpOffer) Reset() {
+	*x = LevelUpOffer{}
+	mi := &file_game_v1_game_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LevelUpOffer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LevelUpOffer) ProtoMessage() {}
+
+func (x *LevelUpOffer) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LevelUpOffer.ProtoReflect.Descriptor instead.
+func (*LevelUpOffer) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *LevelUpOffer) GetOfferId() uint32 {
+	if x != nil {
+		return x.OfferId
+	}
+	return 0
+}
+
+func (x *LevelUpOffer) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *LevelUpOffer) GetOptions() []*UpgradeOption {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+// UpgradeOption 是一個升級選項。
+type UpgradeOption struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 選項種類，例如 "bolt_damage"、"aura_new"、"move_speed"。
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 顯示用的標題與說明。
+	Title       string `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// 選了之後這個項目會變成第幾級（新武器為 1）。
+	Rank          uint32 `protobuf:"varint,4,opt,name=rank,proto3" json:"rank,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpgradeOption) Reset() {
+	*x = UpgradeOption{}
+	mi := &file_game_v1_game_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpgradeOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpgradeOption) ProtoMessage() {}
+
+func (x *UpgradeOption) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpgradeOption.ProtoReflect.Descriptor instead.
+func (*UpgradeOption) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *UpgradeOption) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpgradeOption) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *UpgradeOption) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *UpgradeOption) GetRank() uint32 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
+// ChooseUpgrade 回覆 LevelUpOffer。不合法（offer_id 不符、index 超出範圍）時伺服器拒絕並重送目前的選單。
+type ChooseUpgrade struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	OfferId uint32                 `protobuf:"varint,1,opt,name=offer_id,json=offerId,proto3" json:"offer_id,omitempty"`
+	// 選第幾個（0 起算）。
+	OptionIndex   uint32 `protobuf:"varint,2,opt,name=option_index,json=optionIndex,proto3" json:"option_index,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChooseUpgrade) Reset() {
+	*x = ChooseUpgrade{}
+	mi := &file_game_v1_game_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChooseUpgrade) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChooseUpgrade) ProtoMessage() {}
+
+func (x *ChooseUpgrade) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChooseUpgrade.ProtoReflect.Descriptor instead.
+func (*ChooseUpgrade) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ChooseUpgrade) GetOfferId() uint32 {
+	if x != nil {
+		return x.OfferId
+	}
+	return 0
+}
+
+func (x *ChooseUpgrade) GetOptionIndex() uint32 {
+	if x != nil {
+		return x.OptionIndex
+	}
+	return 0
+}
+
 var File_game_v1_game_proto protoreflect.FileDescriptor
 
 const file_game_v1_game_proto_rawDesc = "" +
 	"\n" +
-	"\x12game/v1/game.proto\x12\agame.v1\"\x99\x01\n" +
+	"\x12game/v1/game.proto\x12\agame.v1\"\xda\x01\n" +
 	"\rClientMessage\x12#\n" +
 	"\x04ping\x18\x01 \x01(\v2\r.game.v1.PingH\x00R\x04ping\x12*\n" +
 	"\x04join\x18\x02 \x01(\v2\x14.game.v1.JoinRequestH\x00R\x04join\x12,\n" +
-	"\x05input\x18\x03 \x01(\v2\x14.game.v1.PlayerInputH\x00R\x05inputB\t\n" +
-	"\apayload\"\x93\x02\n" +
+	"\x05input\x18\x03 \x01(\v2\x14.game.v1.PlayerInputH\x00R\x05input\x12?\n" +
+	"\x0echoose_upgrade\x18\x04 \x01(\v2\x16.game.v1.ChooseUpgradeH\x00R\rchooseUpgradeB\t\n" +
+	"\apayload\"\xd2\x02\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.game.v1.WelcomeH\x00R\awelcome\x12#\n" +
 	"\x04pong\x18\x02 \x01(\v2\r.game.v1.PongH\x00R\x04pong\x12<\n" +
 	"\rjoin_accepted\x18\x03 \x01(\v2\x15.game.v1.JoinAcceptedH\x00R\fjoinAccepted\x124\n" +
 	"\bsnapshot\x18\x04 \x01(\v2\x16.game.v1.WorldSnapshotH\x00R\bsnapshot\x120\n" +
-	"\tgame_over\x18\x05 \x01(\v2\x11.game.v1.GameOverH\x00R\bgameOverB\t\n" +
+	"\tgame_over\x18\x05 \x01(\v2\x11.game.v1.GameOverH\x00R\bgameOver\x12=\n" +
+	"\x0elevel_up_offer\x18\x06 \x01(\v2\x15.game.v1.LevelUpOfferH\x00R\flevelUpOfferB\t\n" +
 	"\apayload\"U\n" +
 	"\aWelcome\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12%\n" +
@@ -1154,7 +1405,7 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\aplayers\x18\x03 \x03(\v2\x14.game.v1.PlayerStateR\aplayers\x12-\n" +
 	"\aenemies\x18\x04 \x03(\v2\x13.game.v1.EnemyStateR\aenemies\x12:\n" +
 	"\vprojectiles\x18\x05 \x03(\v2\x18.game.v1.ProjectileStateR\vprojectiles\x12%\n" +
-	"\x04gems\x18\x06 \x03(\v2\x11.game.v1.GemStateR\x04gems\"\xe0\x01\n" +
+	"\x04gems\x18\x06 \x03(\v2\x11.game.v1.GemStateR\x04gems\"\xb3\x02\n" +
 	"\vPlayerState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -1167,7 +1418,11 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"xp_to_next\x18\b \x01(\rR\bxpToNext\x12\x14\n" +
 	"\x05level\x18\t \x01(\rR\x05level\x12\x14\n" +
 	"\x05kills\x18\n" +
-	" \x01(\rR\x05kills\"_\n" +
+	" \x01(\rR\x05kills\x12\x14\n" +
+	"\x05speed\x18\v \x01(\x02R\x05speed\x12\x1a\n" +
+	"\bchoosing\x18\f \x01(\bR\bchoosing\x12\x1f\n" +
+	"\vaura_radius\x18\r \x01(\x02R\n" +
+	"auraRadius\"_\n" +
 	"\n" +
 	"EnemyState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
@@ -1187,7 +1442,19 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\bGameOver\x12\x1f\n" +
 	"\vsurvived_ms\x18\x01 \x01(\rR\n" +
 	"survivedMs\x12\x14\n" +
-	"\x05kills\x18\x02 \x01(\rR\x05killsB,Z*aigaming/server/internal/pb/game/v1;gamev1b\x06proto3"
+	"\x05kills\x18\x02 \x01(\rR\x05kills\"q\n" +
+	"\fLevelUpOffer\x12\x19\n" +
+	"\boffer_id\x18\x01 \x01(\rR\aofferId\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\rR\x05level\x120\n" +
+	"\aoptions\x18\x03 \x03(\v2\x16.game.v1.UpgradeOptionR\aoptions\"k\n" +
+	"\rUpgradeOption\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x12\n" +
+	"\x04rank\x18\x04 \x01(\rR\x04rank\"M\n" +
+	"\rChooseUpgrade\x12\x19\n" +
+	"\boffer_id\x18\x01 \x01(\rR\aofferId\x12!\n" +
+	"\foption_index\x18\x02 \x01(\rR\voptionIndexB,Z*aigaming/server/internal/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_game_proto_rawDescOnce sync.Once
@@ -1201,7 +1468,7 @@ func file_game_v1_game_proto_rawDescGZIP() []byte {
 	return file_game_v1_game_proto_rawDescData
 }
 
-var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_game_v1_game_proto_goTypes = []any{
 	(*ClientMessage)(nil),   // 0: game.v1.ClientMessage
 	(*ServerMessage)(nil),   // 1: game.v1.ServerMessage
@@ -1217,25 +1484,31 @@ var file_game_v1_game_proto_goTypes = []any{
 	(*ProjectileState)(nil), // 11: game.v1.ProjectileState
 	(*GemState)(nil),        // 12: game.v1.GemState
 	(*GameOver)(nil),        // 13: game.v1.GameOver
+	(*LevelUpOffer)(nil),    // 14: game.v1.LevelUpOffer
+	(*UpgradeOption)(nil),   // 15: game.v1.UpgradeOption
+	(*ChooseUpgrade)(nil),   // 16: game.v1.ChooseUpgrade
 }
 var file_game_v1_game_proto_depIdxs = []int32{
 	3,  // 0: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
 	5,  // 1: game.v1.ClientMessage.join:type_name -> game.v1.JoinRequest
 	7,  // 2: game.v1.ClientMessage.input:type_name -> game.v1.PlayerInput
-	2,  // 3: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
-	4,  // 4: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
-	6,  // 5: game.v1.ServerMessage.join_accepted:type_name -> game.v1.JoinAccepted
-	8,  // 6: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
-	13, // 7: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
-	9,  // 8: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
-	10, // 9: game.v1.WorldSnapshot.enemies:type_name -> game.v1.EnemyState
-	11, // 10: game.v1.WorldSnapshot.projectiles:type_name -> game.v1.ProjectileState
-	12, // 11: game.v1.WorldSnapshot.gems:type_name -> game.v1.GemState
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	16, // 3: game.v1.ClientMessage.choose_upgrade:type_name -> game.v1.ChooseUpgrade
+	2,  // 4: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
+	4,  // 5: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
+	6,  // 6: game.v1.ServerMessage.join_accepted:type_name -> game.v1.JoinAccepted
+	8,  // 7: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
+	13, // 8: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
+	14, // 9: game.v1.ServerMessage.level_up_offer:type_name -> game.v1.LevelUpOffer
+	9,  // 10: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
+	10, // 11: game.v1.WorldSnapshot.enemies:type_name -> game.v1.EnemyState
+	11, // 12: game.v1.WorldSnapshot.projectiles:type_name -> game.v1.ProjectileState
+	12, // 13: game.v1.WorldSnapshot.gems:type_name -> game.v1.GemState
+	15, // 14: game.v1.LevelUpOffer.options:type_name -> game.v1.UpgradeOption
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_game_proto_init() }
@@ -1247,6 +1520,7 @@ func file_game_v1_game_proto_init() {
 		(*ClientMessage_Ping)(nil),
 		(*ClientMessage_Join)(nil),
 		(*ClientMessage_Input)(nil),
+		(*ClientMessage_ChooseUpgrade)(nil),
 	}
 	file_game_v1_game_proto_msgTypes[1].OneofWrappers = []any{
 		(*ServerMessage_Welcome)(nil),
@@ -1254,6 +1528,7 @@ func file_game_v1_game_proto_init() {
 		(*ServerMessage_JoinAccepted)(nil),
 		(*ServerMessage_Snapshot)(nil),
 		(*ServerMessage_GameOver)(nil),
+		(*ServerMessage_LevelUpOffer)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1261,7 +1536,7 @@ func file_game_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_game_proto_rawDesc), len(file_game_v1_game_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
