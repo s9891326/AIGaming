@@ -69,6 +69,9 @@ message JoinAccepted {
   float player_speed = 6;
   // 敵人半徑（遊戲單位），用於繪製。
   float enemy_radius = 7;
+  // 投射物與經驗寶石的半徑（遊戲單位），用於繪製。
+  float projectile_radius = 8;
+  float gem_radius = 9;
 }
 
 // PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
@@ -91,6 +94,8 @@ message WorldSnapshot {
   double server_time_ms = 2;
   repeated PlayerState players = 3;
   repeated EnemyState enemies = 4;
+  repeated ProjectileState projectiles = 5;
+  repeated GemState gems = 6;
 }
 
 // PlayerState 是快照中單一角色的狀態。
@@ -104,6 +109,12 @@ message PlayerState {
   // 目前血量與上限。
   uint32 hp = 5;
   uint32 max_hp = 6;
+  // 經驗值：目前等級累積的經驗、升到下一級需要的經驗、等級。
+  uint32 xp = 7;
+  uint32 xp_to_next = 8;
+  uint32 level = 9;
+  // 擊殺數。
+  uint32 kills = 10;
 }
 
 // EnemyState 是快照中單一敵人的狀態。
@@ -111,6 +122,25 @@ message EnemyState {
   uint32 id = 1;
   float x = 2;
   float y = 3;
+  // 目前血量與上限（被打中時前端閃白）。
+  uint32 hp = 4;
+  uint32 max_hp = 5;
+}
+
+// ProjectileState 是快照中單一投射物的狀態。
+message ProjectileState {
+  uint32 id = 1;
+  float x = 2;
+  float y = 3;
+}
+
+// GemState 是快照中單一經驗寶石的狀態。
+message GemState {
+  uint32 id = 1;
+  float x = 2;
+  float y = 3;
+  // 撿到後增加的經驗值。
+  uint32 value = 4;
 }
 
 // GameOver 在自己的角色血量歸零時送出。之後不再收到快照，

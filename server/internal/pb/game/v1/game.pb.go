@@ -465,9 +465,12 @@ type JoinAccepted struct {
 	// 角色移動速度（單位 / 秒），客戶端預測用，必須與伺服器算法一致。
 	PlayerSpeed float32 `protobuf:"fixed32,6,opt,name=player_speed,json=playerSpeed,proto3" json:"player_speed,omitempty"`
 	// 敵人半徑（遊戲單位），用於繪製。
-	EnemyRadius   float32 `protobuf:"fixed32,7,opt,name=enemy_radius,json=enemyRadius,proto3" json:"enemy_radius,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	EnemyRadius float32 `protobuf:"fixed32,7,opt,name=enemy_radius,json=enemyRadius,proto3" json:"enemy_radius,omitempty"`
+	// 投射物與經驗寶石的半徑（遊戲單位），用於繪製。
+	ProjectileRadius float32 `protobuf:"fixed32,8,opt,name=projectile_radius,json=projectileRadius,proto3" json:"projectile_radius,omitempty"`
+	GemRadius        float32 `protobuf:"fixed32,9,opt,name=gem_radius,json=gemRadius,proto3" json:"gem_radius,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *JoinAccepted) Reset() {
@@ -549,6 +552,20 @@ func (x *JoinAccepted) GetEnemyRadius() float32 {
 	return 0
 }
 
+func (x *JoinAccepted) GetProjectileRadius() float32 {
+	if x != nil {
+		return x.ProjectileRadius
+	}
+	return 0
+}
+
+func (x *JoinAccepted) GetGemRadius() float32 {
+	if x != nil {
+		return x.GemRadius
+	}
+	return 0
+}
+
 // PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
 // 移動時客戶端每個 tick 送一筆，不動時不送。伺服器收到就套用，
 // 並在快照中回報 last_input_seq；客戶端從伺服器位置重播尚未確認的輸入（預測 / 校正）。
@@ -621,9 +638,11 @@ type WorldSnapshot struct {
 	// 第幾個 tick（從伺服器啟動起算）。
 	Tick uint32 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
 	// 產生快照時伺服器的 Unix 時間（毫秒）。
-	ServerTimeMs  float64        `protobuf:"fixed64,2,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
-	Players       []*PlayerState `protobuf:"bytes,3,rep,name=players,proto3" json:"players,omitempty"`
-	Enemies       []*EnemyState  `protobuf:"bytes,4,rep,name=enemies,proto3" json:"enemies,omitempty"`
+	ServerTimeMs  float64            `protobuf:"fixed64,2,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	Players       []*PlayerState     `protobuf:"bytes,3,rep,name=players,proto3" json:"players,omitempty"`
+	Enemies       []*EnemyState      `protobuf:"bytes,4,rep,name=enemies,proto3" json:"enemies,omitempty"`
+	Projectiles   []*ProjectileState `protobuf:"bytes,5,rep,name=projectiles,proto3" json:"projectiles,omitempty"`
+	Gems          []*GemState        `protobuf:"bytes,6,rep,name=gems,proto3" json:"gems,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -686,6 +705,20 @@ func (x *WorldSnapshot) GetEnemies() []*EnemyState {
 	return nil
 }
 
+func (x *WorldSnapshot) GetProjectiles() []*ProjectileState {
+	if x != nil {
+		return x.Projectiles
+	}
+	return nil
+}
+
+func (x *WorldSnapshot) GetGems() []*GemState {
+	if x != nil {
+		return x.Gems
+	}
+	return nil
+}
+
 // PlayerState 是快照中單一角色的狀態。
 type PlayerState struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -696,8 +729,14 @@ type PlayerState struct {
 	// 最後一個已套用的 PlayerInput.seq。
 	LastInputSeq uint32 `protobuf:"varint,4,opt,name=last_input_seq,json=lastInputSeq,proto3" json:"last_input_seq,omitempty"`
 	// 目前血量與上限。
-	Hp            uint32 `protobuf:"varint,5,opt,name=hp,proto3" json:"hp,omitempty"`
-	MaxHp         uint32 `protobuf:"varint,6,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
+	Hp    uint32 `protobuf:"varint,5,opt,name=hp,proto3" json:"hp,omitempty"`
+	MaxHp uint32 `protobuf:"varint,6,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
+	// 經驗值：目前等級累積的經驗、升到下一級需要的經驗、等級。
+	Xp       uint32 `protobuf:"varint,7,opt,name=xp,proto3" json:"xp,omitempty"`
+	XpToNext uint32 `protobuf:"varint,8,opt,name=xp_to_next,json=xpToNext,proto3" json:"xp_to_next,omitempty"`
+	Level    uint32 `protobuf:"varint,9,opt,name=level,proto3" json:"level,omitempty"`
+	// 擊殺數。
+	Kills         uint32 `protobuf:"varint,10,opt,name=kills,proto3" json:"kills,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -774,12 +813,43 @@ func (x *PlayerState) GetMaxHp() uint32 {
 	return 0
 }
 
+func (x *PlayerState) GetXp() uint32 {
+	if x != nil {
+		return x.Xp
+	}
+	return 0
+}
+
+func (x *PlayerState) GetXpToNext() uint32 {
+	if x != nil {
+		return x.XpToNext
+	}
+	return 0
+}
+
+func (x *PlayerState) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *PlayerState) GetKills() uint32 {
+	if x != nil {
+		return x.Kills
+	}
+	return 0
+}
+
 // EnemyState 是快照中單一敵人的狀態。
 type EnemyState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	X             float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
-	Y             float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	X     float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
+	Y     float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
+	// 目前血量與上限（被打中時前端閃白）。
+	Hp            uint32 `protobuf:"varint,4,opt,name=hp,proto3" json:"hp,omitempty"`
+	MaxHp         uint32 `protobuf:"varint,5,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -835,6 +905,151 @@ func (x *EnemyState) GetY() float32 {
 	return 0
 }
 
+func (x *EnemyState) GetHp() uint32 {
+	if x != nil {
+		return x.Hp
+	}
+	return 0
+}
+
+func (x *EnemyState) GetMaxHp() uint32 {
+	if x != nil {
+		return x.MaxHp
+	}
+	return 0
+}
+
+// ProjectileState 是快照中單一投射物的狀態。
+type ProjectileState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	X             float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
+	Y             float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProjectileState) Reset() {
+	*x = ProjectileState{}
+	mi := &file_game_v1_game_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectileState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectileState) ProtoMessage() {}
+
+func (x *ProjectileState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectileState.ProtoReflect.Descriptor instead.
+func (*ProjectileState) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ProjectileState) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *ProjectileState) GetX() float32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *ProjectileState) GetY() float32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+// GemState 是快照中單一經驗寶石的狀態。
+type GemState struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	X     float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
+	Y     float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
+	// 撿到後增加的經驗值。
+	Value         uint32 `protobuf:"varint,4,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GemState) Reset() {
+	*x = GemState{}
+	mi := &file_game_v1_game_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GemState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GemState) ProtoMessage() {}
+
+func (x *GemState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GemState.ProtoReflect.Descriptor instead.
+func (*GemState) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GemState) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *GemState) GetX() float32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *GemState) GetY() float32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *GemState) GetValue() uint32 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
 // GameOver 在自己的角色血量歸零時送出。之後不再收到快照，
 // 想再玩就重新送 JoinRequest（會以新角色加入）。
 type GameOver struct {
@@ -849,7 +1064,7 @@ type GameOver struct {
 
 func (x *GameOver) Reset() {
 	*x = GameOver{}
-	mi := &file_game_v1_game_proto_msgTypes[11]
+	mi := &file_game_v1_game_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -861,7 +1076,7 @@ func (x *GameOver) String() string {
 func (*GameOver) ProtoMessage() {}
 
 func (x *GameOver) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[11]
+	mi := &file_game_v1_game_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -874,7 +1089,7 @@ func (x *GameOver) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameOver.ProtoReflect.Descriptor instead.
 func (*GameOver) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{11}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GameOver) GetSurvivedMs() uint32 {
@@ -916,7 +1131,7 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_ms\x18\x01 \x01(\x01R\fclientTimeMs\x12$\n" +
 	"\x0eserver_time_ms\x18\x02 \x01(\x01R\fserverTimeMs\"\r\n" +
-	"\vJoinRequest\"\xf7\x01\n" +
+	"\vJoinRequest\"\xc3\x02\n" +
 	"\fJoinAccepted\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x1f\n" +
 	"\vworld_width\x18\x02 \x01(\x02R\n" +
@@ -925,28 +1140,50 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\ttick_rate\x18\x04 \x01(\rR\btickRate\x12#\n" +
 	"\rplayer_radius\x18\x05 \x01(\x02R\fplayerRadius\x12!\n" +
 	"\fplayer_speed\x18\x06 \x01(\x02R\vplayerSpeed\x12!\n" +
-	"\fenemy_radius\x18\a \x01(\x02R\venemyRadius\"M\n" +
+	"\fenemy_radius\x18\a \x01(\x02R\venemyRadius\x12+\n" +
+	"\x11projectile_radius\x18\b \x01(\x02R\x10projectileRadius\x12\x1d\n" +
+	"\n" +
+	"gem_radius\x18\t \x01(\x02R\tgemRadius\"M\n" +
 	"\vPlayerInput\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\rR\x03seq\x12\x15\n" +
 	"\x06move_x\x18\x02 \x01(\x02R\x05moveX\x12\x15\n" +
-	"\x06move_y\x18\x03 \x01(\x02R\x05moveY\"\xa8\x01\n" +
+	"\x06move_y\x18\x03 \x01(\x02R\x05moveY\"\x8b\x02\n" +
 	"\rWorldSnapshot\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\rR\x04tick\x12$\n" +
 	"\x0eserver_time_ms\x18\x02 \x01(\x01R\fserverTimeMs\x12.\n" +
 	"\aplayers\x18\x03 \x03(\v2\x14.game.v1.PlayerStateR\aplayers\x12-\n" +
-	"\aenemies\x18\x04 \x03(\v2\x13.game.v1.EnemyStateR\aenemies\"\x86\x01\n" +
+	"\aenemies\x18\x04 \x03(\v2\x13.game.v1.EnemyStateR\aenemies\x12:\n" +
+	"\vprojectiles\x18\x05 \x03(\v2\x18.game.v1.ProjectileStateR\vprojectiles\x12%\n" +
+	"\x04gems\x18\x06 \x03(\v2\x11.game.v1.GemStateR\x04gems\"\xe0\x01\n" +
 	"\vPlayerState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
 	"\x01y\x18\x03 \x01(\x02R\x01y\x12$\n" +
 	"\x0elast_input_seq\x18\x04 \x01(\rR\flastInputSeq\x12\x0e\n" +
 	"\x02hp\x18\x05 \x01(\rR\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\x06 \x01(\rR\x05maxHp\"8\n" +
+	"\x06max_hp\x18\x06 \x01(\rR\x05maxHp\x12\x0e\n" +
+	"\x02xp\x18\a \x01(\rR\x02xp\x12\x1c\n" +
+	"\n" +
+	"xp_to_next\x18\b \x01(\rR\bxpToNext\x12\x14\n" +
+	"\x05level\x18\t \x01(\rR\x05level\x12\x14\n" +
+	"\x05kills\x18\n" +
+	" \x01(\rR\x05kills\"_\n" +
 	"\n" +
 	"EnemyState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
-	"\x01y\x18\x03 \x01(\x02R\x01y\"A\n" +
+	"\x01y\x18\x03 \x01(\x02R\x01y\x12\x0e\n" +
+	"\x02hp\x18\x04 \x01(\rR\x02hp\x12\x15\n" +
+	"\x06max_hp\x18\x05 \x01(\rR\x05maxHp\"=\n" +
+	"\x0fProjectileState\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
+	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
+	"\x01y\x18\x03 \x01(\x02R\x01y\"L\n" +
+	"\bGemState\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
+	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
+	"\x01y\x18\x03 \x01(\x02R\x01y\x12\x14\n" +
+	"\x05value\x18\x04 \x01(\rR\x05value\"A\n" +
 	"\bGameOver\x12\x1f\n" +
 	"\vsurvived_ms\x18\x01 \x01(\rR\n" +
 	"survivedMs\x12\x14\n" +
@@ -964,20 +1201,22 @@ func file_game_v1_game_proto_rawDescGZIP() []byte {
 	return file_game_v1_game_proto_rawDescData
 }
 
-var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_game_v1_game_proto_goTypes = []any{
-	(*ClientMessage)(nil), // 0: game.v1.ClientMessage
-	(*ServerMessage)(nil), // 1: game.v1.ServerMessage
-	(*Welcome)(nil),       // 2: game.v1.Welcome
-	(*Ping)(nil),          // 3: game.v1.Ping
-	(*Pong)(nil),          // 4: game.v1.Pong
-	(*JoinRequest)(nil),   // 5: game.v1.JoinRequest
-	(*JoinAccepted)(nil),  // 6: game.v1.JoinAccepted
-	(*PlayerInput)(nil),   // 7: game.v1.PlayerInput
-	(*WorldSnapshot)(nil), // 8: game.v1.WorldSnapshot
-	(*PlayerState)(nil),   // 9: game.v1.PlayerState
-	(*EnemyState)(nil),    // 10: game.v1.EnemyState
-	(*GameOver)(nil),      // 11: game.v1.GameOver
+	(*ClientMessage)(nil),   // 0: game.v1.ClientMessage
+	(*ServerMessage)(nil),   // 1: game.v1.ServerMessage
+	(*Welcome)(nil),         // 2: game.v1.Welcome
+	(*Ping)(nil),            // 3: game.v1.Ping
+	(*Pong)(nil),            // 4: game.v1.Pong
+	(*JoinRequest)(nil),     // 5: game.v1.JoinRequest
+	(*JoinAccepted)(nil),    // 6: game.v1.JoinAccepted
+	(*PlayerInput)(nil),     // 7: game.v1.PlayerInput
+	(*WorldSnapshot)(nil),   // 8: game.v1.WorldSnapshot
+	(*PlayerState)(nil),     // 9: game.v1.PlayerState
+	(*EnemyState)(nil),      // 10: game.v1.EnemyState
+	(*ProjectileState)(nil), // 11: game.v1.ProjectileState
+	(*GemState)(nil),        // 12: game.v1.GemState
+	(*GameOver)(nil),        // 13: game.v1.GameOver
 }
 var file_game_v1_game_proto_depIdxs = []int32{
 	3,  // 0: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
@@ -987,14 +1226,16 @@ var file_game_v1_game_proto_depIdxs = []int32{
 	4,  // 4: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
 	6,  // 5: game.v1.ServerMessage.join_accepted:type_name -> game.v1.JoinAccepted
 	8,  // 6: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
-	11, // 7: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
+	13, // 7: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
 	9,  // 8: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
 	10, // 9: game.v1.WorldSnapshot.enemies:type_name -> game.v1.EnemyState
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 10: game.v1.WorldSnapshot.projectiles:type_name -> game.v1.ProjectileState
+	12, // 11: game.v1.WorldSnapshot.gems:type_name -> game.v1.GemState
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_game_proto_init() }
@@ -1020,7 +1261,7 @@ func file_game_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_game_proto_rawDesc), len(file_game_v1_game_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
