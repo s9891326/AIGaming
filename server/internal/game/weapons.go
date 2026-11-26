@@ -1,6 +1,9 @@
 package game
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 // Weapon 是玩家身上的一把武器。World 每個 tick 對每位玩家的每把武器呼叫一次 Update；
 // 武器自己管理冷卻，並決定何時、往哪裡發射（透過 World.spawnProjectile）。
@@ -17,11 +20,14 @@ type ProjectileID uint32
 type Projectile struct {
 	ID     ProjectileID
 	Owner  PlayerID // 擊殺記給誰
+	Source string   // 哪把武器發射的（擊殺統計用）
 	Pos    Vec2
 	Vel    Vec2 // 單位 / 秒
 	Damage int
 	Radius float64
 	TTL    float64 // 剩餘飛行秒數
+	Pierce int     // 還能再穿透幾隻（0 = 命中一隻就消失）
+	hit    []EnemyID
 }
 
 // MagicBoltConfig 是「魔法飛彈」的參數。
@@ -33,6 +39,7 @@ type MagicBoltConfig struct {
 	Radius   float64
 	Lifetime float64 // 最長飛行秒數
 	Count    int     // 每次同時射幾發（各打不同的敵人）
+	Pierce   int     // 每發可以額外穿透幾隻
 }
 
 // DefaultMagicBolt 是預設的魔法飛彈：每 0.8 秒朝最近的敵人射一發，一發打死一隻普通敵人（HP 20）。
@@ -78,11 +85,13 @@ func (m *MagicBolt) Update(w *World, owner *Player, dt float64) {
 		}
 		w.spawnProjectile(Projectile{
 			Owner:  owner.ID,
+			Source: m.Name(),
 			Pos:    owner.Pos,
 			Vel:    dir.Scale(m.cfg.Speed),
 			Damage: m.cfg.Damage,
 			Radius: m.cfg.Radius,
 			TTL:    m.cfg.Lifetime,
+			Pierce: m.cfg.Pierce,
 		})
 	}
 	m.cooldown = m.cfg.Cooldown
@@ -95,8 +104,8 @@ type AuraConfig struct {
 	Interval float64 // 每隔多久造成一次傷害
 }
 
-// DefaultAura 是預設的聖光環。
-var DefaultAura = AuraConfig{Radius: 70, Damage: 10, Interval: 0.5}
+// DefaultAura 是預設的聖光環（數值以 cmd/sim 的 build 比較調整過）。
+var DefaultAura = AuraConfig{Radius: 100, Damage: 14, Interval: 0.4}
 
 // Aura 定期傷害玩家身邊範圍內的所有敵人，不需要瞄準、不產生投射物。
 type Aura struct {
@@ -119,13 +128,76 @@ func (a *Aura) Update(w *World, owner *Player, dt float64) {
 	if a.timer > timeEps {
 		return
 	}
-	reach := a.cfg.Radius + w.cfg.Combat.EnemyRadius
 	for _, e := range w.enemies {
-		if e.HP > 0 && dist(e.Pos, owner.Pos) < reach {
-			w.damageEnemy(e, a.cfg.Damage, owner.ID)
+		if e.HP > 0 && dist(e.Pos, owner.Pos) < a.cfg.Radius+e.Radius {
+			w.damageEnemy(e, a.cfg.Damage, owner.ID, a.Name())
 		}
 	}
 	a.timer = a.cfg.Interval
+}
+
+// OrbitConfig 是「旋刃」的參數。
+type OrbitConfig struct {
+	Count       int     // 刀刃片數
+	Radius      float64 // 繞行半徑
+	Speed       float64 // 轉速（弧度 / 秒）
+	BladeRadius float64 // 刀刃碰撞半徑
+	Damage      int
+	HitInterval float64 // 同一隻敵人被同一把旋刃連續打到的最短間隔（秒）
+}
+
+// DefaultOrbit 是預設的旋刃：三片刀刃、繞 95 單位、約 1.7 秒轉一圈（數值以 cmd/sim 的 build 比較調整過）。
+var DefaultOrbit = OrbitConfig{Count: 3, Radius: 95, Speed: 3.6, BladeRadius: 18, Damage: 22, HitInterval: 0.4}
+
+// Orbit 是繞著玩家旋轉的刀刃，碰到的敵人受傷。
+// 角度只由世界時間決定（不用累加），客戶端可以用同一個公式畫出平滑的旋轉。
+type Orbit struct {
+	cfg     OrbitConfig
+	lastHit map[EnemyID]float64 // 每隻敵人上次被打到的世界時間
+}
+
+// NewOrbit 建立旋刃。
+func NewOrbit(cfg OrbitConfig) *Orbit { return &Orbit{cfg: cfg, lastHit: make(map[EnemyID]float64)} }
+
+// Name 實作 Weapon。
+func (o *Orbit) Name() string { return "orbit" }
+
+// Config 回傳目前的參數（給快照繪製用）。
+func (o *Orbit) Config() OrbitConfig { return o.cfg }
+
+// BladePositions 回傳世界時間 t 時每片刀刃的位置。
+func (o *Orbit) BladePositions(center Vec2, t float64) []Vec2 {
+	out := make([]Vec2, o.cfg.Count)
+	for i := range out {
+		a := o.cfg.Speed*t + float64(i)*2*math.Pi/float64(o.cfg.Count)
+		out[i] = center.Add(Vec2{math.Cos(a), math.Sin(a)}.Scale(o.cfg.Radius))
+	}
+	return out
+}
+
+// Update 實作 Weapon：每片刀刃打到的敵人受傷，同一隻敵人間隔 HitInterval 才會再被打。
+func (o *Orbit) Update(w *World, owner *Player, _ float64) {
+	t := w.Time()
+	for _, b := range o.BladePositions(owner.Pos, t) {
+		for _, e := range w.enemies {
+			if e.HP <= 0 || dist(e.Pos, b) >= o.cfg.BladeRadius+e.Radius {
+				continue
+			}
+			if last, ok := o.lastHit[e.ID]; ok && t-last < o.cfg.HitInterval-timeEps {
+				continue
+			}
+			o.lastHit[e.ID] = t
+			w.damageEnemy(e, o.cfg.Damage, owner.ID, o.Name())
+		}
+	}
+	// 清掉已經不在的敵人，避免 map 無限成長。
+	if len(o.lastHit) > 2*len(w.enemies)+16 {
+		for id, last := range o.lastHit {
+			if t-last > o.cfg.HitInterval {
+				delete(o.lastHit, id)
+			}
+		}
+	}
 }
 
 // Projectiles 回傳所有投射物的副本。
@@ -173,14 +245,18 @@ func (w *World) nearestEnemies(pos Vec2, maxDist float64, n int) []*Enemy {
 	return out
 }
 
-// damageEnemy 對敵人造成傷害；HP 歸零時記錄擊殺並掉寶石（實際移除在 removeDeadEnemies）。
-func (w *World) damageEnemy(e *Enemy, damage int, owner PlayerID) {
+// damageEnemy 對敵人造成傷害（乘上發射者的力量倍率）；HP 歸零時記錄擊殺並掉寶石
+// （實際移除在 removeDeadEnemies）。source 是武器名稱，用於擊殺統計。
+func (w *World) damageEnemy(e *Enemy, damage int, owner PlayerID, source string) {
 	if e.HP <= 0 {
 		return
 	}
+	if p := w.players[owner]; p != nil && p.Might > 0 {
+		damage = int(math.Round(float64(damage) * p.Might))
+	}
 	e.HP = max(0, e.HP-damage)
 	if e.HP == 0 {
-		w.onEnemyKilled(e, owner)
+		w.onEnemyKilled(e, owner, source)
 	}
 }
 
@@ -198,24 +274,26 @@ func (w *World) updateWeapons(players []*Player, dt float64) {
 // 每個 tick 的位移（450 × 0.05 = 22.5）小於投射物與敵人的半徑和的兩倍（40），所以不會「穿過」敵人；
 // 之後若有更快的投射物，要改成掃掠（swept）碰撞。
 func (w *World) updateProjectiles(dt float64) {
-	er := w.cfg.Combat.EnemyRadius
 	kept := w.projectiles[:0]
 	for _, p := range w.projectiles {
 		p.Pos = p.Pos.Add(p.Vel.Scale(dt))
 		p.TTL -= dt
 
-		hit := false
+		spent := false
 		for _, e := range w.enemies {
-			if e.HP <= 0 || dist(e.Pos, p.Pos) >= p.Radius+er {
+			if e.HP <= 0 || dist(e.Pos, p.Pos) >= p.Radius+e.Radius || slices.Contains(p.hit, e.ID) {
 				continue
 			}
-			w.damageEnemy(e, p.Damage, p.Owner)
-			hit = true
-			break
+			w.damageEnemy(e, p.Damage, p.Owner, p.Source)
+			p.hit = append(p.hit, e.ID) // 同一發不會打同一隻兩次
+			if len(p.hit) > p.Pierce {
+				spent = true
+			}
+			break // 每個 tick 最多命中一隻，穿透的投射物下一個 tick 繼續
 		}
 
 		outside := p.Pos.X < 0 || p.Pos.Y < 0 || p.Pos.X > w.cfg.Width || p.Pos.Y > w.cfg.Height
-		if !hit && p.TTL > timeEps && !outside {
+		if !spent && p.TTL > timeEps && !outside {
 			kept = append(kept, p)
 		}
 	}
@@ -224,12 +302,18 @@ func (w *World) updateProjectiles(dt float64) {
 	w.removeDeadEnemies()
 }
 
-// onEnemyKilled 記錄擊殺並在敵人位置掉落寶石。發射者已離開或死亡時不記擊殺，但仍會掉寶石。
-func (w *World) onEnemyKilled(e *Enemy, killer PlayerID) {
+// onEnemyKilled 記錄擊殺並在敵人位置掉落寶石（價值依敵人種類）。
+// 發射者已離開或死亡時不記擊殺，但仍會掉寶石。
+func (w *World) onEnemyKilled(e *Enemy, killer PlayerID, source string) {
 	if p := w.players[killer]; p != nil {
 		p.Kills++
+		p.KillsBy[source]++
 	}
-	w.dropGem(e.Pos, w.cfg.Loot.GemValue)
+	xp := e.XP
+	if xp <= 0 {
+		xp = w.cfg.Loot.GemValue
+	}
+	w.dropGem(e.Pos, xp)
 }
 
 func (w *World) removeDeadEnemies() {

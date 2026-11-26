@@ -41,6 +41,9 @@ type WorldConfig struct {
 	Loot   LootConfig
 	// StartingWeapons 建立新玩家一開始的武器；nil 代表沒有武器。
 	StartingWeapons func() []Weapon
+
+	// Seed 不為 0 時使用固定亂數種子（模擬、重現問題用）；0 代表每次隨機。
+	Seed uint64
 }
 
 // DefaultWorldConfig 是預設的世界參數：世界比畫面（960×640）大，相機跟隨玩家。
@@ -76,6 +79,11 @@ type Player struct {
 	// 會被升級改變的個人數值。
 	Speed        float64 // 移動速度（單位 / 秒）
 	MagnetRadius float64 // 寶石吸取範圍
+	Might        float64 // 傷害倍率（1 = 100%）
+
+	// KillsBy 記錄每把武器的擊殺數（用來比較不同 build）。
+	KillsBy     map[string]int
+	nextEliteAt float64 // 下一隻精英的存活秒數（0 = 尚未排定）
 
 	// 升級：PendingLevelUps 是還沒選的升級次數；Offer 不為 nil 代表正在選（被凍結）。
 	PendingLevelUps int
@@ -115,8 +123,15 @@ func NewWorld(cfg WorldConfig) *World {
 		nextProjectileID: 1,
 		nextGemID:        1,
 		nextOfferID:      1,
-		rng:              rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+		rng:              newRand(cfg.Seed),
 	}
+}
+
+func newRand(seed uint64) *rand.Rand {
+	if seed == 0 {
+		return rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+	}
+	return rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
 }
 
 // Config 回傳世界參數。
@@ -124,6 +139,9 @@ func (w *World) Config() WorldConfig { return w.cfg }
 
 // Tick 回傳目前是第幾個 tick。
 func (w *World) Tick() uint32 { return w.tick }
+
+// Time 回傳以 tick 計算的世界時間（秒）。暫停時仍會前進，與客戶端用 tick 估計的伺服器時間一致。
+func (w *World) Time() float64 { return float64(w.tick) * w.cfg.InputDt }
 
 // AddPlayer 在世界中央加入新角色並回傳 ID。
 func (w *World) AddPlayer() PlayerID {
@@ -144,6 +162,8 @@ func (w *World) AddPlayer() PlayerID {
 		Weapons:      weapons,
 		Speed:        w.cfg.PlayerSpeed,
 		MagnetRadius: w.cfg.Loot.MagnetRadius,
+		Might:        1,
+		KillsBy:      make(map[string]int),
 		Upgrades:     make(map[string]int),
 	}
 	return id

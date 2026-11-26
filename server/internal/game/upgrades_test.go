@@ -2,6 +2,7 @@ package game
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -214,20 +215,21 @@ func TestUpgradeEffects(t *testing.T) {
 		w, p := upgradeWorld()
 		p.Weapons = nil // 只看聖光環
 		choose(t, w, p, "aura_new")
-		e := w.addEnemy(Vec2{p.Pos.X + 50, p.Pos.Y}) // 70 內
-		e.HP, e.MaxHP = 100, 100
-		far := w.addEnemy(Vec2{p.Pos.X + 200, p.Pos.Y})
-		far.HP, far.MaxHP = 100, 100
+		cfg := DefaultAura
+		e := w.addEnemy(Vec2{p.Pos.X + cfg.Radius/2, p.Pos.Y}) // 範圍內
+		e.HP, e.MaxHP = 1000, 1000
+		far := w.addEnemy(Vec2{p.Pos.X + cfg.Radius + 50, p.Pos.Y}) // 範圍外
+		far.HP, far.MaxHP = 1000, 1000
 
-		stepFor(w, 1) // 第 1 個 tick、0.55 秒各一次
-
-		if e.HP != 80 || far.HP != 100 {
-			t.Fatalf("aura hp near=%d far=%d, want 80 / 100", e.HP, far.HP)
+		stepFor(w, 1) // 第 1 個 tick 一次，之後每 Interval 一次
+		hits := int(math.Floor((1-0.05)/cfg.Interval+1e-9)) + 1
+		if e.HP != 1000-hits*cfg.Damage || far.HP != 1000 {
+			t.Fatalf("aura hp near=%d far=%d, want %d / 1000", e.HP, far.HP, 1000-hits*cfg.Damage)
 		}
 		choose(t, w, p, "aura_up")
 		a := weaponOf[*Aura](p)
-		if !near(a.Radius(), 84) || a.cfg.Damage != 15 {
-			t.Fatalf("aura after upgrade radius=%v damage=%d, want 84 / 15", a.Radius(), a.cfg.Damage)
+		if !near(a.Radius(), cfg.Radius*1.2) || a.cfg.Damage != cfg.Damage+8 {
+			t.Fatalf("aura after upgrade radius=%v damage=%d", a.Radius(), a.cfg.Damage)
 		}
 	})
 }
@@ -284,4 +286,34 @@ func TestWeaponUpgradesNeedTheWeapon(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestNewUpgradeEffects(t *testing.T) {
+	t.Run("bolt_pierce", func(t *testing.T) {
+		w, p := upgradeWorld()
+		choose(t, w, p, "bolt_pierce")
+		if weaponOf[*MagicBolt](p).cfg.Pierce != 1 {
+			t.Fatal("pierce should be 1")
+		}
+	})
+	t.Run("orbit_new_and_up", func(t *testing.T) {
+		w, p := upgradeWorld()
+		choose(t, w, p, "orbit_new")
+		if !hasWeapon[*Orbit](p) {
+			t.Fatal("should own orbit")
+		}
+		choose(t, w, p, "orbit_up")
+		d := DefaultOrbit
+		if c := weaponOf[*Orbit](p).Config(); c.Count != d.Count+1 || c.Damage != d.Damage+8 || !near(c.Radius, d.Radius*1.1) {
+			t.Fatalf("orbit after upgrade = %+v, want +1 blade, +8 damage, +10%% radius", c)
+		}
+	})
+	t.Run("might", func(t *testing.T) {
+		w, p := upgradeWorld()
+		choose(t, w, p, "might")
+		choose(t, w, p, "might")
+		if !near(p.Might, 1.3) {
+			t.Fatalf("might = %v, want 1.3", p.Might)
+		}
+	})
 }

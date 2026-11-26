@@ -67,6 +67,12 @@ var upgradeDefs = []upgradeDef{
 		apply:     func(_ *World, p *Player) { weaponOf[*MagicBolt](p).cfg.Count++ },
 	},
 	{
+		id: "bolt_pierce", title: "魔法飛彈：穿透", maxRank: 3,
+		describe:  func(r int) string { return fmt.Sprintf("每發可以穿透 %d 隻敵人", r) },
+		available: hasWeapon[*MagicBolt],
+		apply:     func(_ *World, p *Player) { weaponOf[*MagicBolt](p).cfg.Pierce++ },
+	},
+	{
 		id: "aura_new", title: "新武器：聖光環", maxRank: 1,
 		describe: func(int) string {
 			return fmt.Sprintf("持續傷害身邊 %.0f 內的敵人（每 %.1f 秒 %d）",
@@ -77,13 +83,38 @@ var upgradeDefs = []upgradeDef{
 	},
 	{
 		id: "aura_up", title: "聖光環：擴散", maxRank: 4,
-		describe:  func(int) string { return "範圍 +20%、傷害 +5" },
+		describe:  func(int) string { return "範圍 +20%、傷害 +8" },
 		available: hasWeapon[*Aura],
 		apply: func(_ *World, p *Player) {
 			a := weaponOf[*Aura](p)
 			a.cfg.Radius *= 1.2
-			a.cfg.Damage += 5
+			a.cfg.Damage += 8
 		},
+	},
+	{
+		id: "orbit_new", title: "新武器：旋刃", maxRank: 1,
+		describe: func(int) string {
+			return fmt.Sprintf("%d 片刀刃繞著你旋轉，碰到的敵人受到 %d 傷害", DefaultOrbit.Count, DefaultOrbit.Damage)
+		},
+		available: func(p *Player) bool { return !hasWeapon[*Orbit](p) },
+		apply:     func(_ *World, p *Player) { p.Weapons = append(p.Weapons, NewOrbit(DefaultOrbit)) },
+	},
+	{
+		id: "orbit_up", title: "旋刃：增刃", maxRank: 4,
+		describe:  func(int) string { return "刀刃 +1 片、傷害 +8、範圍 +10%" },
+		available: hasWeapon[*Orbit],
+		apply: func(_ *World, p *Player) {
+			o := weaponOf[*Orbit](p)
+			o.cfg.Count++
+			o.cfg.Damage += 8
+			o.cfg.Radius *= 1.1
+		},
+	},
+	{
+		id: "might", title: "力量", maxRank: 5,
+		describe:  func(int) string { return "所有武器傷害 +15%" },
+		available: always,
+		apply:     func(_ *World, p *Player) { p.Might += 0.15 },
 	},
 	{
 		id: "move_speed", title: "疾行", maxRank: 5,

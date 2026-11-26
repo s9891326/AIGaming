@@ -35,8 +35,12 @@ func newCombatWorld(cfg WorldConfig) *World {
 
 // addEnemy 直接放一隻敵人（不經過生成），方便測試追蹤 / 碰撞。
 func (w *World) addEnemy(pos Vec2) *Enemy {
-	hp := max(w.cfg.Combat.EnemyHP, 1)
-	e := &Enemy{ID: w.nextEnemyID, Pos: pos, HP: hp, MaxHP: hp}
+	c := w.cfg.Combat
+	hp := max(c.EnemyHP, 1)
+	e := &Enemy{
+		ID: w.nextEnemyID, Kind: KindGrunt, Pos: pos, HP: hp, MaxHP: hp,
+		Speed: c.EnemySpeed, Radius: c.EnemyRadius, Damage: c.ContactDamage, XP: w.cfg.Loot.GemValue,
+	}
 	w.nextEnemyID++
 	w.enemies = append(w.enemies, e)
 	return e
@@ -78,7 +82,7 @@ func TestEnemiesSpawnOffScreenInsideWorld(t *testing.T) {
 	}
 	// 生成點本身剛好在 SpawnDistance（畫面外）。
 	for range 100 {
-		if d := dist(w.spawnPoint(center), center); !near(d, cfg.Combat.SpawnDistance) {
+		if d := dist(w.spawnPoint(center, cfg.Combat.EnemyRadius), center); !near(d, cfg.Combat.SpawnDistance) {
 			t.Fatalf("spawn point %v away, want exactly %v", d, cfg.Combat.SpawnDistance)
 		}
 	}
@@ -113,7 +117,7 @@ func TestSpawnNearWorldCornerStaysAway(t *testing.T) {
 
 	r := cfg.Combat.EnemyRadius
 	for range 200 {
-		p := w.spawnPoint(w.Player(id).Pos)
+		p := w.spawnPoint(w.Player(id).Pos, cfg.Combat.EnemyRadius)
 		if d := dist(p, Vec2{20, 20}); !near(d, cfg.Combat.SpawnDistance) {
 			t.Fatalf("spawn point %+v is %v away from a player in the corner, want %v", p, d, cfg.Combat.SpawnDistance)
 		}
