@@ -45,7 +45,7 @@ func (w *World) addEnemy(pos Vec2) *Enemy {
 func stepFor(w *World, seconds float64) []Death {
 	var deaths []Death
 	for range int(math.Round(seconds / 0.05)) {
-		deaths = append(deaths, w.Step(0.05)...)
+		deaths = append(deaths, w.Step(0.05).Deaths...)
 	}
 	return deaths
 }

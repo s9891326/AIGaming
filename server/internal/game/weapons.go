@@ -32,6 +32,7 @@ type MagicBoltConfig struct {
 	Damage   int
 	Radius   float64
 	Lifetime float64 // 最長飛行秒數
+	Count    int     // 每次同時射幾發（各打不同的敵人）
 }
 
 // DefaultMagicBolt 是預設的魔法飛彈：每 0.8 秒朝最近的敵人射一發，一發打死一隻普通敵人（HP 20）。
@@ -43,6 +44,7 @@ var DefaultMagicBolt = MagicBoltConfig{
 	Damage:   20,
 	Radius:   6,
 	Lifetime: 1.3,
+	Count:    1,
 }
 
 // MagicBolt 朝最近的敵人直線發射投射物。
@@ -57,31 +59,73 @@ func NewMagicBolt(cfg MagicBoltConfig) *MagicBolt { return &MagicBolt{cfg: cfg} 
 // Name 實作 Weapon。
 func (m *MagicBolt) Name() string { return "magic_bolt" }
 
-// Update 實作 Weapon：冷卻好了、射程內有敵人時，朝最近的敵人發射一發。
-// 沒有目標時保持「已就緒」，敵人一進入射程就立刻發射。
+// Update 實作 Weapon：冷卻好了、射程內有敵人時，朝最近的 Count 隻敵人各發射一發
+// （敵人不夠多時只射有目標的）。沒有目標時保持「已就緒」，敵人一進入射程就立刻發射。
 func (m *MagicBolt) Update(w *World, owner *Player, dt float64) {
 	m.cooldown = math.Max(0, m.cooldown-dt)
 	if m.cooldown > timeEps {
 		return
 	}
-	target := w.nearestEnemy(owner.Pos, m.cfg.Range)
-	if target == nil {
+	targets := w.nearestEnemies(owner.Pos, m.cfg.Range, max(1, m.cfg.Count))
+	if len(targets) == 0 {
 		return
 	}
-	d := dist(target.Pos, owner.Pos)
-	dir := Vec2{1, 0}
-	if d > 1e-9 {
-		dir = Vec2{(target.Pos.X - owner.Pos.X) / d, (target.Pos.Y - owner.Pos.Y) / d}
+	for _, target := range targets {
+		d := dist(target.Pos, owner.Pos)
+		dir := Vec2{1, 0}
+		if d > 1e-9 {
+			dir = Vec2{(target.Pos.X - owner.Pos.X) / d, (target.Pos.Y - owner.Pos.Y) / d}
+		}
+		w.spawnProjectile(Projectile{
+			Owner:  owner.ID,
+			Pos:    owner.Pos,
+			Vel:    dir.Scale(m.cfg.Speed),
+			Damage: m.cfg.Damage,
+			Radius: m.cfg.Radius,
+			TTL:    m.cfg.Lifetime,
+		})
 	}
-	w.spawnProjectile(Projectile{
-		Owner:  owner.ID,
-		Pos:    owner.Pos,
-		Vel:    dir.Scale(m.cfg.Speed),
-		Damage: m.cfg.Damage,
-		Radius: m.cfg.Radius,
-		TTL:    m.cfg.Lifetime,
-	})
 	m.cooldown = m.cfg.Cooldown
+}
+
+// AuraConfig 是「聖光環」的參數。
+type AuraConfig struct {
+	Radius   float64 // 傷害範圍（玩家中心到敵人邊緣）
+	Damage   int
+	Interval float64 // 每隔多久造成一次傷害
+}
+
+// DefaultAura 是預設的聖光環。
+var DefaultAura = AuraConfig{Radius: 70, Damage: 10, Interval: 0.5}
+
+// Aura 定期傷害玩家身邊範圍內的所有敵人，不需要瞄準、不產生投射物。
+type Aura struct {
+	cfg   AuraConfig
+	timer float64
+}
+
+// NewAura 建立聖光環（一開始就會造成傷害）。
+func NewAura(cfg AuraConfig) *Aura { return &Aura{cfg: cfg} }
+
+// Name 實作 Weapon。
+func (a *Aura) Name() string { return "aura" }
+
+// Radius 回傳目前的傷害範圍（給快照繪製用）。
+func (a *Aura) Radius() float64 { return a.cfg.Radius }
+
+// Update 實作 Weapon：每 Interval 秒對範圍內的每隻敵人造成一次傷害。
+func (a *Aura) Update(w *World, owner *Player, dt float64) {
+	a.timer = math.Max(0, a.timer-dt)
+	if a.timer > timeEps {
+		return
+	}
+	reach := a.cfg.Radius + w.cfg.Combat.EnemyRadius
+	for _, e := range w.enemies {
+		if e.HP > 0 && dist(e.Pos, owner.Pos) < reach {
+			w.damageEnemy(e, a.cfg.Damage, owner.ID)
+		}
+	}
+	a.timer = a.cfg.Interval
 }
 
 // Projectiles 回傳所有投射物的副本。
@@ -99,19 +143,45 @@ func (w *World) spawnProjectile(p Projectile) {
 	w.projectiles = append(w.projectiles, &p)
 }
 
-// nearestEnemy 回傳 maxDist 內最近的存活敵人，沒有則回傳 nil。
-func (w *World) nearestEnemy(pos Vec2, maxDist float64) *Enemy {
-	var best *Enemy
-	bestD := maxDist
+// nearestEnemies 回傳 maxDist 內最近的 n 隻存活敵人（由近到遠）。
+func (w *World) nearestEnemies(pos Vec2, maxDist float64, n int) []*Enemy {
+	type cand struct {
+		e *Enemy
+		d float64
+	}
+	var cs []cand
 	for _, e := range w.enemies {
 		if e.HP <= 0 {
 			continue
 		}
-		if d := dist(e.Pos, pos); d <= bestD {
-			best, bestD = e, d
+		if d := dist(e.Pos, pos); d <= maxDist {
+			cs = append(cs, cand{e, d})
 		}
 	}
-	return best
+	// n 很小（≤ 4），部分選擇排序就夠了。
+	out := make([]*Enemy, 0, min(n, len(cs)))
+	for k := 0; k < n && k < len(cs); k++ {
+		best := k
+		for i := k + 1; i < len(cs); i++ {
+			if cs[i].d < cs[best].d || (cs[i].d == cs[best].d && cs[i].e.ID < cs[best].e.ID) {
+				best = i
+			}
+		}
+		cs[k], cs[best] = cs[best], cs[k]
+		out = append(out, cs[k].e)
+	}
+	return out
+}
+
+// damageEnemy 對敵人造成傷害；HP 歸零時記錄擊殺並掉寶石（實際移除在 removeDeadEnemies）。
+func (w *World) damageEnemy(e *Enemy, damage int, owner PlayerID) {
+	if e.HP <= 0 {
+		return
+	}
+	e.HP = max(0, e.HP-damage)
+	if e.HP == 0 {
+		w.onEnemyKilled(e, owner)
+	}
 }
 
 func (w *World) updateWeapons(players []*Player, dt float64) {
@@ -139,10 +209,7 @@ func (w *World) updateProjectiles(dt float64) {
 			if e.HP <= 0 || dist(e.Pos, p.Pos) >= p.Radius+er {
 				continue
 			}
-			e.HP = max(0, e.HP-p.Damage)
-			if e.HP == 0 {
-				w.onEnemyKilled(e, p.Owner)
-			}
+			w.damageEnemy(e, p.Damage, p.Owner)
 			hit = true
 			break
 		}

@@ -86,7 +86,9 @@ func (l *Loop) Run(ctx context.Context) {
 			cmd(l)
 		case <-ticker.C:
 			start := l.now()
-			l.handleDeaths(l.world.Step(dt))
+			res := l.world.Step(dt)
+			l.handleDeaths(res.Deaths)
+			l.sendOffers(res.Offers)
 			l.broadcast()
 			if took := l.now().Sub(start); took > interval/2 {
 				l.log.Warn("slow tick", "tick", l.world.Tick(), "took", took, "budget", interval)
@@ -148,6 +150,49 @@ func (l *Loop) Input(key string, seq uint32, x, y float64) {
 	})
 }
 
+// Choose 套用 key 的玩家在升級選單中的選擇。不合法時記 Warn 並重送目前的選單，
+// 讓客戶端畫面與伺服器保持一致。
+func (l *Loop) Choose(key string, offerID uint32, index int) {
+	l.enqueue(func(l *Loop) {
+		m, ok := l.members[key]
+		if !ok {
+			return
+		}
+		opt, err := l.world.ChooseUpgrade(m.id, offerID, index)
+		if err != nil {
+			l.log.Warn("invalid upgrade choice", "conn", key, "player", m.id,
+				"offer", offerID, "index", index, "err", err)
+			if p := l.world.Player(m.id); p != nil && p.Offer != nil {
+				_ = m.sink.Send(offerMessage(*p.Offer))
+			}
+			return
+		}
+		l.log.Info("upgrade chosen", "conn", key, "player", m.id, "upgrade", opt.ID, "rank", opt.Rank)
+	})
+}
+
+func (l *Loop) sendOffers(offers []OfferEvent) {
+	for _, o := range offers {
+		for key, m := range l.members {
+			if m.id == o.Player {
+				_ = m.sink.Send(offerMessage(o.Offer))
+				l.log.Info("level up", "conn", key, "player", m.id, "level", o.Offer.Level)
+				break
+			}
+		}
+	}
+}
+
+func offerMessage(o Offer) *gamev1.ServerMessage {
+	opts := make([]*gamev1.UpgradeOption, len(o.Options))
+	for i, op := range o.Options {
+		opts[i] = &gamev1.UpgradeOption{Id: op.ID, Title: op.Title, Description: op.Description, Rank: uint32(op.Rank)}
+	}
+	return &gamev1.ServerMessage{Payload: &gamev1.ServerMessage_LevelUpOffer{LevelUpOffer: &gamev1.LevelUpOffer{
+		OfferId: o.ID, Level: uint32(o.Level), Options: opts,
+	}}}
+}
+
 // handleDeaths 通知死亡的玩家並把他們移出成員：之後不再收到快照，
 // 連線保持開著，客戶端想再玩就重新送 JoinRequest（Join 會以新角色加入）。
 func (l *Loop) handleDeaths(deaths []Death) {
@@ -194,6 +239,9 @@ func (l *Loop) broadcast() {
 			XpToNext:     uint32(l.cfg.World.Loot.XPToNext(p.Level)),
 			Level:        uint32(p.Level),
 			Kills:        p.Kills,
+			Speed:        float32(p.Speed),
+			Choosing:     p.Choosing(),
+			AuraRadius:   float32(auraRadius(p)),
 		}
 	}
 	enemies := l.world.Enemies()
@@ -226,4 +274,11 @@ func (l *Loop) broadcast() {
 		// Send 不會阻塞；失敗代表連線正在關閉，稍後會收到 Leave。
 		_ = m.sink.Send(msg)
 	}
+}
+
+func auraRadius(p Player) float64 {
+	if a := weaponOf[*Aura](&p); a != nil {
+		return a.Radius()
+	}
+	return 0
 }
