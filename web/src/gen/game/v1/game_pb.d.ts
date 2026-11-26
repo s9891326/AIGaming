@@ -264,6 +264,20 @@ export declare type JoinAccepted = Message<"game.v1.JoinAccepted"> & {
    * @generated from field: float gem_radius = 9;
    */
   gemRadius: number;
+
+  /**
+   * 各種敵人的外觀資訊（半徑），只在加入時送一次，快照中的敵人只帶種類。
+   *
+   * @generated from field: repeated game.v1.EnemyKindInfo enemy_kinds = 10;
+   */
+  enemyKinds: EnemyKindInfo[];
+
+  /**
+   * 敵人 / 投射物 / 寶石座標的量化倍率：快照中的 qx、qy = round(座標 × position_scale)。
+   *
+   * @generated from field: uint32 position_scale = 11;
+   */
+  positionScale: number;
 };
 
 /**
@@ -271,6 +285,29 @@ export declare type JoinAccepted = Message<"game.v1.JoinAccepted"> & {
  * Use `create(JoinAcceptedSchema)` to create a new message.
  */
 export declare const JoinAcceptedSchema: GenMessage<JoinAccepted>;
+
+/**
+ * EnemyKindInfo 是一種敵人的外觀資訊。
+ *
+ * @generated from message game.v1.EnemyKindInfo
+ */
+export declare type EnemyKindInfo = Message<"game.v1.EnemyKindInfo"> & {
+  /**
+   * @generated from field: game.v1.EnemyKind kind = 1;
+   */
+  kind: EnemyKind;
+
+  /**
+   * @generated from field: float radius = 2;
+   */
+  radius: number;
+};
+
+/**
+ * Describes the message game.v1.EnemyKindInfo.
+ * Use `create(EnemyKindInfoSchema)` to create a new message.
+ */
+export declare const EnemyKindInfoSchema: GenMessage<EnemyKindInfo>;
 
 /**
  * PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
@@ -309,6 +346,8 @@ export declare const PlayerInputSchema: GenMessage<PlayerInput>;
 
 /**
  * WorldSnapshot 是伺服器每個 tick 廣播的世界狀態。
+ * 為了節省頻寬：每位玩家只收到自己畫面附近（再加邊距）的敵人 / 投射物 / 寶石（AOI）；
+ * 這些實體的座標量化成整數（見 JoinAccepted.position_scale）。玩家的座標維持 float，客戶端預測需要精確值。
  *
  * @generated from message game.v1.WorldSnapshot
  */
@@ -490,38 +529,28 @@ export declare type EnemyState = Message<"game.v1.EnemyState"> & {
   id: number;
 
   /**
-   * @generated from field: float x = 2;
-   */
-  x: number;
-
-  /**
-   * @generated from field: float y = 3;
-   */
-  y: number;
-
-  /**
-   * 目前血量與上限（被打中時前端閃白）。
-   *
-   * @generated from field: uint32 hp = 4;
-   */
-  hp: number;
-
-  /**
-   * @generated from field: uint32 max_hp = 5;
-   */
-  maxHp: number;
-
-  /**
    * @generated from field: game.v1.EnemyKind kind = 6;
    */
   kind: EnemyKind;
 
   /**
-   * 這隻敵人的碰撞半徑（依種類不同）。
+   * 量化後的座標（÷ position_scale 得到遊戲座標）。varint 約 2～3 bytes，float 固定 5 bytes。
    *
-   * @generated from field: float radius = 7;
+   * @generated from field: uint32 qx = 8;
    */
-  radius: number;
+  qx: number;
+
+  /**
+   * @generated from field: uint32 qy = 9;
+   */
+  qy: number;
+
+  /**
+   * 已損失的血量百分比（0～100）。滿血時是 0、不會被編碼（proto3 預設值不送）。
+   *
+   * @generated from field: uint32 damage_pct = 10;
+   */
+  damagePct: number;
 };
 
 /**
@@ -542,14 +571,16 @@ export declare type ProjectileState = Message<"game.v1.ProjectileState"> & {
   id: number;
 
   /**
-   * @generated from field: float x = 2;
+   * 量化後的座標（÷ position_scale）。
+   *
+   * @generated from field: uint32 qx = 4;
    */
-  x: number;
+  qx: number;
 
   /**
-   * @generated from field: float y = 3;
+   * @generated from field: uint32 qy = 5;
    */
-  y: number;
+  qy: number;
 };
 
 /**
@@ -570,21 +601,23 @@ export declare type GemState = Message<"game.v1.GemState"> & {
   id: number;
 
   /**
-   * @generated from field: float x = 2;
-   */
-  x: number;
-
-  /**
-   * @generated from field: float y = 3;
-   */
-  y: number;
-
-  /**
    * 撿到後增加的經驗值。
    *
    * @generated from field: uint32 value = 4;
    */
   value: number;
+
+  /**
+   * 量化後的座標（÷ position_scale）。
+   *
+   * @generated from field: uint32 qx = 5;
+   */
+  qx: number;
+
+  /**
+   * @generated from field: uint32 qy = 6;
+   */
+  qy: number;
 };
 
 /**

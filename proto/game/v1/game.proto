@@ -74,6 +74,16 @@ message JoinAccepted {
   // 投射物與經驗寶石的半徑（遊戲單位），用於繪製。
   float projectile_radius = 8;
   float gem_radius = 9;
+  // 各種敵人的外觀資訊（半徑），只在加入時送一次，快照中的敵人只帶種類。
+  repeated EnemyKindInfo enemy_kinds = 10;
+  // 敵人 / 投射物 / 寶石座標的量化倍率：快照中的 qx、qy = round(座標 × position_scale)。
+  uint32 position_scale = 11;
+}
+
+// EnemyKindInfo 是一種敵人的外觀資訊。
+message EnemyKindInfo {
+  EnemyKind kind = 1;
+  float radius = 2;
 }
 
 // PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
@@ -89,6 +99,8 @@ message PlayerInput {
 }
 
 // WorldSnapshot 是伺服器每個 tick 廣播的世界狀態。
+// 為了節省頻寬：每位玩家只收到自己畫面附近（再加邊距）的敵人 / 投射物 / 寶石（AOI）；
+// 這些實體的座標量化成整數（見 JoinAccepted.position_scale）。玩家的座標維持 float，客戶端預測需要精確值。
 message WorldSnapshot {
   // 第幾個 tick（從伺服器啟動起算）。
   uint32 tick = 1;
@@ -135,15 +147,17 @@ message PlayerState {
 
 // EnemyState 是快照中單一敵人的狀態。
 message EnemyState {
+  // #10 之前的 float 座標、hp / max_hp、radius，改成下面更小的欄位。
+  reserved 2, 3, 4, 5, 7;
+  reserved "x", "y", "hp", "max_hp", "radius";
+
   uint32 id = 1;
-  float x = 2;
-  float y = 3;
-  // 目前血量與上限（被打中時前端閃白）。
-  uint32 hp = 4;
-  uint32 max_hp = 5;
   EnemyKind kind = 6;
-  // 這隻敵人的碰撞半徑（依種類不同）。
-  float radius = 7;
+  // 量化後的座標（÷ position_scale 得到遊戲座標）。varint 約 2～3 bytes，float 固定 5 bytes。
+  uint32 qx = 8;
+  uint32 qy = 9;
+  // 已損失的血量百分比（0～100）。滿血時是 0、不會被編碼（proto3 預設值不送）。
+  uint32 damage_pct = 10;
 }
 
 // EnemyKind 是敵人種類。
@@ -161,18 +175,26 @@ enum EnemyKind {
 
 // ProjectileState 是快照中單一投射物的狀態。
 message ProjectileState {
+  reserved 2, 3;
+  reserved "x", "y";
+
   uint32 id = 1;
-  float x = 2;
-  float y = 3;
+  // 量化後的座標（÷ position_scale）。
+  uint32 qx = 4;
+  uint32 qy = 5;
 }
 
 // GemState 是快照中單一經驗寶石的狀態。
 message GemState {
+  reserved 2, 3;
+  reserved "x", "y";
+
   uint32 id = 1;
-  float x = 2;
-  float y = 3;
   // 撿到後增加的經驗值。
   uint32 value = 4;
+  // 量化後的座標（÷ position_scale）。
+  uint32 qx = 5;
+  uint32 qy = 6;
 }
 
 // GameOver 在自己的角色血量歸零時送出。之後不再收到快照，

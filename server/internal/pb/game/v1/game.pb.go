@@ -561,8 +561,12 @@ type JoinAccepted struct {
 	// 投射物與經驗寶石的半徑（遊戲單位），用於繪製。
 	ProjectileRadius float32 `protobuf:"fixed32,8,opt,name=projectile_radius,json=projectileRadius,proto3" json:"projectile_radius,omitempty"`
 	GemRadius        float32 `protobuf:"fixed32,9,opt,name=gem_radius,json=gemRadius,proto3" json:"gem_radius,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 各種敵人的外觀資訊（半徑），只在加入時送一次，快照中的敵人只帶種類。
+	EnemyKinds []*EnemyKindInfo `protobuf:"bytes,10,rep,name=enemy_kinds,json=enemyKinds,proto3" json:"enemy_kinds,omitempty"`
+	// 敵人 / 投射物 / 寶石座標的量化倍率：快照中的 qx、qy = round(座標 × position_scale)。
+	PositionScale uint32 `protobuf:"varint,11,opt,name=position_scale,json=positionScale,proto3" json:"position_scale,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JoinAccepted) Reset() {
@@ -658,6 +662,73 @@ func (x *JoinAccepted) GetGemRadius() float32 {
 	return 0
 }
 
+func (x *JoinAccepted) GetEnemyKinds() []*EnemyKindInfo {
+	if x != nil {
+		return x.EnemyKinds
+	}
+	return nil
+}
+
+func (x *JoinAccepted) GetPositionScale() uint32 {
+	if x != nil {
+		return x.PositionScale
+	}
+	return 0
+}
+
+// EnemyKindInfo 是一種敵人的外觀資訊。
+type EnemyKindInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          EnemyKind              `protobuf:"varint,1,opt,name=kind,proto3,enum=game.v1.EnemyKind" json:"kind,omitempty"`
+	Radius        float32                `protobuf:"fixed32,2,opt,name=radius,proto3" json:"radius,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnemyKindInfo) Reset() {
+	*x = EnemyKindInfo{}
+	mi := &file_game_v1_game_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnemyKindInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnemyKindInfo) ProtoMessage() {}
+
+func (x *EnemyKindInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_game_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnemyKindInfo.ProtoReflect.Descriptor instead.
+func (*EnemyKindInfo) Descriptor() ([]byte, []int) {
+	return file_game_v1_game_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *EnemyKindInfo) GetKind() EnemyKind {
+	if x != nil {
+		return x.Kind
+	}
+	return EnemyKind_ENEMY_KIND_UNSPECIFIED
+}
+
+func (x *EnemyKindInfo) GetRadius() float32 {
+	if x != nil {
+		return x.Radius
+	}
+	return 0
+}
+
 // PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
 // 移動時客戶端每個 tick 送一筆，不動時不送。伺服器收到就套用，
 // 並在快照中回報 last_input_seq；客戶端從伺服器位置重播尚未確認的輸入（預測 / 校正）。
@@ -675,7 +746,7 @@ type PlayerInput struct {
 
 func (x *PlayerInput) Reset() {
 	*x = PlayerInput{}
-	mi := &file_game_v1_game_proto_msgTypes[7]
+	mi := &file_game_v1_game_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -687,7 +758,7 @@ func (x *PlayerInput) String() string {
 func (*PlayerInput) ProtoMessage() {}
 
 func (x *PlayerInput) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[7]
+	mi := &file_game_v1_game_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -700,7 +771,7 @@ func (x *PlayerInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInput.ProtoReflect.Descriptor instead.
 func (*PlayerInput) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{7}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PlayerInput) GetSeq() uint32 {
@@ -725,6 +796,8 @@ func (x *PlayerInput) GetMoveY() float32 {
 }
 
 // WorldSnapshot 是伺服器每個 tick 廣播的世界狀態。
+// 為了節省頻寬：每位玩家只收到自己畫面附近（再加邊距）的敵人 / 投射物 / 寶石（AOI）；
+// 這些實體的座標量化成整數（見 JoinAccepted.position_scale）。玩家的座標維持 float，客戶端預測需要精確值。
 type WorldSnapshot struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 第幾個 tick（從伺服器啟動起算）。
@@ -741,7 +814,7 @@ type WorldSnapshot struct {
 
 func (x *WorldSnapshot) Reset() {
 	*x = WorldSnapshot{}
-	mi := &file_game_v1_game_proto_msgTypes[8]
+	mi := &file_game_v1_game_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -753,7 +826,7 @@ func (x *WorldSnapshot) String() string {
 func (*WorldSnapshot) ProtoMessage() {}
 
 func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[8]
+	mi := &file_game_v1_game_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -766,7 +839,7 @@ func (x *WorldSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldSnapshot.ProtoReflect.Descriptor instead.
 func (*WorldSnapshot) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{8}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *WorldSnapshot) GetTick() uint32 {
@@ -849,7 +922,7 @@ type PlayerState struct {
 
 func (x *PlayerState) Reset() {
 	*x = PlayerState{}
-	mi := &file_game_v1_game_proto_msgTypes[9]
+	mi := &file_game_v1_game_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -861,7 +934,7 @@ func (x *PlayerState) String() string {
 func (*PlayerState) ProtoMessage() {}
 
 func (x *PlayerState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[9]
+	mi := &file_game_v1_game_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -874,7 +947,7 @@ func (x *PlayerState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerState.ProtoReflect.Descriptor instead.
 func (*PlayerState) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{9}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PlayerState) GetId() uint32 {
@@ -1007,21 +1080,19 @@ func (x *PlayerState) GetSurvivedMs() uint32 {
 type EnemyState struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	X     float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
-	Y     float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
-	// 目前血量與上限（被打中時前端閃白）。
-	Hp    uint32    `protobuf:"varint,4,opt,name=hp,proto3" json:"hp,omitempty"`
-	MaxHp uint32    `protobuf:"varint,5,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
-	Kind  EnemyKind `protobuf:"varint,6,opt,name=kind,proto3,enum=game.v1.EnemyKind" json:"kind,omitempty"`
-	// 這隻敵人的碰撞半徑（依種類不同）。
-	Radius        float32 `protobuf:"fixed32,7,opt,name=radius,proto3" json:"radius,omitempty"`
+	Kind  EnemyKind              `protobuf:"varint,6,opt,name=kind,proto3,enum=game.v1.EnemyKind" json:"kind,omitempty"`
+	// 量化後的座標（÷ position_scale 得到遊戲座標）。varint 約 2～3 bytes，float 固定 5 bytes。
+	Qx uint32 `protobuf:"varint,8,opt,name=qx,proto3" json:"qx,omitempty"`
+	Qy uint32 `protobuf:"varint,9,opt,name=qy,proto3" json:"qy,omitempty"`
+	// 已損失的血量百分比（0～100）。滿血時是 0、不會被編碼（proto3 預設值不送）。
+	DamagePct     uint32 `protobuf:"varint,10,opt,name=damage_pct,json=damagePct,proto3" json:"damage_pct,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *EnemyState) Reset() {
 	*x = EnemyState{}
-	mi := &file_game_v1_game_proto_msgTypes[10]
+	mi := &file_game_v1_game_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1033,7 +1104,7 @@ func (x *EnemyState) String() string {
 func (*EnemyState) ProtoMessage() {}
 
 func (x *EnemyState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[10]
+	mi := &file_game_v1_game_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1046,40 +1117,12 @@ func (x *EnemyState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnemyState.ProtoReflect.Descriptor instead.
 func (*EnemyState) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{10}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *EnemyState) GetId() uint32 {
 	if x != nil {
 		return x.Id
-	}
-	return 0
-}
-
-func (x *EnemyState) GetX() float32 {
-	if x != nil {
-		return x.X
-	}
-	return 0
-}
-
-func (x *EnemyState) GetY() float32 {
-	if x != nil {
-		return x.Y
-	}
-	return 0
-}
-
-func (x *EnemyState) GetHp() uint32 {
-	if x != nil {
-		return x.Hp
-	}
-	return 0
-}
-
-func (x *EnemyState) GetMaxHp() uint32 {
-	if x != nil {
-		return x.MaxHp
 	}
 	return 0
 }
@@ -1091,26 +1134,41 @@ func (x *EnemyState) GetKind() EnemyKind {
 	return EnemyKind_ENEMY_KIND_UNSPECIFIED
 }
 
-func (x *EnemyState) GetRadius() float32 {
+func (x *EnemyState) GetQx() uint32 {
 	if x != nil {
-		return x.Radius
+		return x.Qx
+	}
+	return 0
+}
+
+func (x *EnemyState) GetQy() uint32 {
+	if x != nil {
+		return x.Qy
+	}
+	return 0
+}
+
+func (x *EnemyState) GetDamagePct() uint32 {
+	if x != nil {
+		return x.DamagePct
 	}
 	return 0
 }
 
 // ProjectileState 是快照中單一投射物的狀態。
 type ProjectileState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	X             float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
-	Y             float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 量化後的座標（÷ position_scale）。
+	Qx            uint32 `protobuf:"varint,4,opt,name=qx,proto3" json:"qx,omitempty"`
+	Qy            uint32 `protobuf:"varint,5,opt,name=qy,proto3" json:"qy,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ProjectileState) Reset() {
 	*x = ProjectileState{}
-	mi := &file_game_v1_game_proto_msgTypes[11]
+	mi := &file_game_v1_game_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1122,7 +1180,7 @@ func (x *ProjectileState) String() string {
 func (*ProjectileState) ProtoMessage() {}
 
 func (x *ProjectileState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[11]
+	mi := &file_game_v1_game_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1135,7 +1193,7 @@ func (x *ProjectileState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectileState.ProtoReflect.Descriptor instead.
 func (*ProjectileState) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{11}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ProjectileState) GetId() uint32 {
@@ -1145,16 +1203,16 @@ func (x *ProjectileState) GetId() uint32 {
 	return 0
 }
 
-func (x *ProjectileState) GetX() float32 {
+func (x *ProjectileState) GetQx() uint32 {
 	if x != nil {
-		return x.X
+		return x.Qx
 	}
 	return 0
 }
 
-func (x *ProjectileState) GetY() float32 {
+func (x *ProjectileState) GetQy() uint32 {
 	if x != nil {
-		return x.Y
+		return x.Qy
 	}
 	return 0
 }
@@ -1163,17 +1221,18 @@ func (x *ProjectileState) GetY() float32 {
 type GemState struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	X     float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
-	Y     float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
 	// 撿到後增加的經驗值。
-	Value         uint32 `protobuf:"varint,4,opt,name=value,proto3" json:"value,omitempty"`
+	Value uint32 `protobuf:"varint,4,opt,name=value,proto3" json:"value,omitempty"`
+	// 量化後的座標（÷ position_scale）。
+	Qx            uint32 `protobuf:"varint,5,opt,name=qx,proto3" json:"qx,omitempty"`
+	Qy            uint32 `protobuf:"varint,6,opt,name=qy,proto3" json:"qy,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GemState) Reset() {
 	*x = GemState{}
-	mi := &file_game_v1_game_proto_msgTypes[12]
+	mi := &file_game_v1_game_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1185,7 +1244,7 @@ func (x *GemState) String() string {
 func (*GemState) ProtoMessage() {}
 
 func (x *GemState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[12]
+	mi := &file_game_v1_game_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1198,7 +1257,7 @@ func (x *GemState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GemState.ProtoReflect.Descriptor instead.
 func (*GemState) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{12}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GemState) GetId() uint32 {
@@ -1208,23 +1267,23 @@ func (x *GemState) GetId() uint32 {
 	return 0
 }
 
-func (x *GemState) GetX() float32 {
-	if x != nil {
-		return x.X
-	}
-	return 0
-}
-
-func (x *GemState) GetY() float32 {
-	if x != nil {
-		return x.Y
-	}
-	return 0
-}
-
 func (x *GemState) GetValue() uint32 {
 	if x != nil {
 		return x.Value
+	}
+	return 0
+}
+
+func (x *GemState) GetQx() uint32 {
+	if x != nil {
+		return x.Qx
+	}
+	return 0
+}
+
+func (x *GemState) GetQy() uint32 {
+	if x != nil {
+		return x.Qy
 	}
 	return 0
 }
@@ -1243,7 +1302,7 @@ type GameOver struct {
 
 func (x *GameOver) Reset() {
 	*x = GameOver{}
-	mi := &file_game_v1_game_proto_msgTypes[13]
+	mi := &file_game_v1_game_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1255,7 +1314,7 @@ func (x *GameOver) String() string {
 func (*GameOver) ProtoMessage() {}
 
 func (x *GameOver) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[13]
+	mi := &file_game_v1_game_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1268,7 +1327,7 @@ func (x *GameOver) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameOver.ProtoReflect.Descriptor instead.
 func (*GameOver) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{13}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GameOver) GetSurvivedMs() uint32 {
@@ -1300,7 +1359,7 @@ type LevelUpOffer struct {
 
 func (x *LevelUpOffer) Reset() {
 	*x = LevelUpOffer{}
-	mi := &file_game_v1_game_proto_msgTypes[14]
+	mi := &file_game_v1_game_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1312,7 +1371,7 @@ func (x *LevelUpOffer) String() string {
 func (*LevelUpOffer) ProtoMessage() {}
 
 func (x *LevelUpOffer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[14]
+	mi := &file_game_v1_game_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1325,7 +1384,7 @@ func (x *LevelUpOffer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LevelUpOffer.ProtoReflect.Descriptor instead.
 func (*LevelUpOffer) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{14}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *LevelUpOffer) GetOfferId() uint32 {
@@ -1365,7 +1424,7 @@ type UpgradeOption struct {
 
 func (x *UpgradeOption) Reset() {
 	*x = UpgradeOption{}
-	mi := &file_game_v1_game_proto_msgTypes[15]
+	mi := &file_game_v1_game_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1377,7 +1436,7 @@ func (x *UpgradeOption) String() string {
 func (*UpgradeOption) ProtoMessage() {}
 
 func (x *UpgradeOption) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[15]
+	mi := &file_game_v1_game_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1390,7 +1449,7 @@ func (x *UpgradeOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeOption.ProtoReflect.Descriptor instead.
 func (*UpgradeOption) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{15}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UpgradeOption) GetId() string {
@@ -1433,7 +1492,7 @@ type ChooseUpgrade struct {
 
 func (x *ChooseUpgrade) Reset() {
 	*x = ChooseUpgrade{}
-	mi := &file_game_v1_game_proto_msgTypes[16]
+	mi := &file_game_v1_game_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1445,7 +1504,7 @@ func (x *ChooseUpgrade) String() string {
 func (*ChooseUpgrade) ProtoMessage() {}
 
 func (x *ChooseUpgrade) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_game_proto_msgTypes[16]
+	mi := &file_game_v1_game_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1458,7 +1517,7 @@ func (x *ChooseUpgrade) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChooseUpgrade.ProtoReflect.Descriptor instead.
 func (*ChooseUpgrade) Descriptor() ([]byte, []int) {
-	return file_game_v1_game_proto_rawDescGZIP(), []int{16}
+	return file_game_v1_game_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ChooseUpgrade) GetOfferId() uint32 {
@@ -1502,7 +1561,7 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_ms\x18\x01 \x01(\x01R\fclientTimeMs\x12$\n" +
 	"\x0eserver_time_ms\x18\x02 \x01(\x01R\fserverTimeMs\"\r\n" +
-	"\vJoinRequest\"\xc3\x02\n" +
+	"\vJoinRequest\"\xa3\x03\n" +
 	"\fJoinAccepted\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x1f\n" +
 	"\vworld_width\x18\x02 \x01(\x02R\n" +
@@ -1514,7 +1573,14 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"\fenemy_radius\x18\a \x01(\x02R\venemyRadius\x12+\n" +
 	"\x11projectile_radius\x18\b \x01(\x02R\x10projectileRadius\x12\x1d\n" +
 	"\n" +
-	"gem_radius\x18\t \x01(\x02R\tgemRadius\"M\n" +
+	"gem_radius\x18\t \x01(\x02R\tgemRadius\x127\n" +
+	"\venemy_kinds\x18\n" +
+	" \x03(\v2\x16.game.v1.EnemyKindInfoR\n" +
+	"enemyKinds\x12%\n" +
+	"\x0eposition_scale\x18\v \x01(\rR\rpositionScale\"O\n" +
+	"\rEnemyKindInfo\x12&\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x12.game.v1.EnemyKindR\x04kind\x12\x16\n" +
+	"\x06radius\x18\x02 \x01(\x02R\x06radius\"M\n" +
 	"\vPlayerInput\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\rR\x03seq\x12\x15\n" +
 	"\x06move_x\x18\x02 \x01(\x02R\x05moveX\x12\x15\n" +
@@ -1550,25 +1616,25 @@ const file_game_v1_game_proto_rawDesc = "" +
 	"orbitSpeed\x12,\n" +
 	"\x12orbit_blade_radius\x18\x11 \x01(\x02R\x10orbitBladeRadius\x12\x1f\n" +
 	"\vsurvived_ms\x18\x12 \x01(\rR\n" +
-	"survivedMs\"\x9f\x01\n" +
+	"survivedMs\"\xbb\x01\n" +
 	"\n" +
 	"EnemyState\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
-	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
-	"\x01y\x18\x03 \x01(\x02R\x01y\x12\x0e\n" +
-	"\x02hp\x18\x04 \x01(\rR\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\x05 \x01(\rR\x05maxHp\x12&\n" +
-	"\x04kind\x18\x06 \x01(\x0e2\x12.game.v1.EnemyKindR\x04kind\x12\x16\n" +
-	"\x06radius\x18\a \x01(\x02R\x06radius\"=\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12&\n" +
+	"\x04kind\x18\x06 \x01(\x0e2\x12.game.v1.EnemyKindR\x04kind\x12\x0e\n" +
+	"\x02qx\x18\b \x01(\rR\x02qx\x12\x0e\n" +
+	"\x02qy\x18\t \x01(\rR\x02qy\x12\x1d\n" +
+	"\n" +
+	"damage_pct\x18\n" +
+	" \x01(\rR\tdamagePctJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\a\x10\bR\x01xR\x01yR\x02hpR\x06max_hpR\x06radius\"S\n" +
 	"\x0fProjectileState\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
-	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
-	"\x01y\x18\x03 \x01(\x02R\x01y\"L\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x0e\n" +
+	"\x02qx\x18\x04 \x01(\rR\x02qx\x12\x0e\n" +
+	"\x02qy\x18\x05 \x01(\rR\x02qyJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\x01xR\x01y\"b\n" +
 	"\bGemState\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
-	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
-	"\x01y\x18\x03 \x01(\x02R\x01y\x12\x14\n" +
-	"\x05value\x18\x04 \x01(\rR\x05value\"A\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x14\n" +
+	"\x05value\x18\x04 \x01(\rR\x05value\x12\x0e\n" +
+	"\x02qx\x18\x05 \x01(\rR\x02qx\x12\x0e\n" +
+	"\x02qy\x18\x06 \x01(\rR\x02qyJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\x01xR\x01y\"A\n" +
 	"\bGameOver\x12\x1f\n" +
 	"\vsurvived_ms\x18\x01 \x01(\rR\n" +
 	"survivedMs\x12\x14\n" +
@@ -1605,7 +1671,7 @@ func file_game_v1_game_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_game_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_game_v1_game_proto_goTypes = []any{
 	(EnemyKind)(0),          // 0: game.v1.EnemyKind
 	(*ClientMessage)(nil),   // 1: game.v1.ClientMessage
@@ -1615,39 +1681,42 @@ var file_game_v1_game_proto_goTypes = []any{
 	(*Pong)(nil),            // 5: game.v1.Pong
 	(*JoinRequest)(nil),     // 6: game.v1.JoinRequest
 	(*JoinAccepted)(nil),    // 7: game.v1.JoinAccepted
-	(*PlayerInput)(nil),     // 8: game.v1.PlayerInput
-	(*WorldSnapshot)(nil),   // 9: game.v1.WorldSnapshot
-	(*PlayerState)(nil),     // 10: game.v1.PlayerState
-	(*EnemyState)(nil),      // 11: game.v1.EnemyState
-	(*ProjectileState)(nil), // 12: game.v1.ProjectileState
-	(*GemState)(nil),        // 13: game.v1.GemState
-	(*GameOver)(nil),        // 14: game.v1.GameOver
-	(*LevelUpOffer)(nil),    // 15: game.v1.LevelUpOffer
-	(*UpgradeOption)(nil),   // 16: game.v1.UpgradeOption
-	(*ChooseUpgrade)(nil),   // 17: game.v1.ChooseUpgrade
+	(*EnemyKindInfo)(nil),   // 8: game.v1.EnemyKindInfo
+	(*PlayerInput)(nil),     // 9: game.v1.PlayerInput
+	(*WorldSnapshot)(nil),   // 10: game.v1.WorldSnapshot
+	(*PlayerState)(nil),     // 11: game.v1.PlayerState
+	(*EnemyState)(nil),      // 12: game.v1.EnemyState
+	(*ProjectileState)(nil), // 13: game.v1.ProjectileState
+	(*GemState)(nil),        // 14: game.v1.GemState
+	(*GameOver)(nil),        // 15: game.v1.GameOver
+	(*LevelUpOffer)(nil),    // 16: game.v1.LevelUpOffer
+	(*UpgradeOption)(nil),   // 17: game.v1.UpgradeOption
+	(*ChooseUpgrade)(nil),   // 18: game.v1.ChooseUpgrade
 }
 var file_game_v1_game_proto_depIdxs = []int32{
 	4,  // 0: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
 	6,  // 1: game.v1.ClientMessage.join:type_name -> game.v1.JoinRequest
-	8,  // 2: game.v1.ClientMessage.input:type_name -> game.v1.PlayerInput
-	17, // 3: game.v1.ClientMessage.choose_upgrade:type_name -> game.v1.ChooseUpgrade
+	9,  // 2: game.v1.ClientMessage.input:type_name -> game.v1.PlayerInput
+	18, // 3: game.v1.ClientMessage.choose_upgrade:type_name -> game.v1.ChooseUpgrade
 	3,  // 4: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
 	5,  // 5: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
 	7,  // 6: game.v1.ServerMessage.join_accepted:type_name -> game.v1.JoinAccepted
-	9,  // 7: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
-	14, // 8: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
-	15, // 9: game.v1.ServerMessage.level_up_offer:type_name -> game.v1.LevelUpOffer
-	10, // 10: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
-	11, // 11: game.v1.WorldSnapshot.enemies:type_name -> game.v1.EnemyState
-	12, // 12: game.v1.WorldSnapshot.projectiles:type_name -> game.v1.ProjectileState
-	13, // 13: game.v1.WorldSnapshot.gems:type_name -> game.v1.GemState
-	0,  // 14: game.v1.EnemyState.kind:type_name -> game.v1.EnemyKind
-	16, // 15: game.v1.LevelUpOffer.options:type_name -> game.v1.UpgradeOption
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	10, // 7: game.v1.ServerMessage.snapshot:type_name -> game.v1.WorldSnapshot
+	15, // 8: game.v1.ServerMessage.game_over:type_name -> game.v1.GameOver
+	16, // 9: game.v1.ServerMessage.level_up_offer:type_name -> game.v1.LevelUpOffer
+	8,  // 10: game.v1.JoinAccepted.enemy_kinds:type_name -> game.v1.EnemyKindInfo
+	0,  // 11: game.v1.EnemyKindInfo.kind:type_name -> game.v1.EnemyKind
+	11, // 12: game.v1.WorldSnapshot.players:type_name -> game.v1.PlayerState
+	12, // 13: game.v1.WorldSnapshot.enemies:type_name -> game.v1.EnemyState
+	13, // 14: game.v1.WorldSnapshot.projectiles:type_name -> game.v1.ProjectileState
+	14, // 15: game.v1.WorldSnapshot.gems:type_name -> game.v1.GemState
+	0,  // 16: game.v1.EnemyState.kind:type_name -> game.v1.EnemyKind
+	17, // 17: game.v1.LevelUpOffer.options:type_name -> game.v1.UpgradeOption
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_game_proto_init() }
@@ -1675,7 +1744,7 @@ func file_game_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_game_proto_rawDesc), len(file_game_v1_game_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

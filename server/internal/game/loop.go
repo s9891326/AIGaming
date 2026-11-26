@@ -117,6 +117,8 @@ func (l *Loop) Join(key string, sink Sink) {
 				EnemyRadius:      float32(l.cfg.World.Combat.EnemyRadius),
 				ProjectileRadius: float32(DefaultMagicBolt.Radius),
 				GemRadius:        float32(l.cfg.World.Loot.GemRadius),
+				EnemyKinds:       enemyKindInfos(l.cfg.World.Combat),
+				PositionScale:    PositionScale,
 			},
 		}})
 		l.log.Info("player joined", "conn", key, "player", id, "players", len(l.members))
@@ -225,69 +227,14 @@ func (l *Loop) broadcast() {
 	if len(l.members) == 0 {
 		return
 	}
-	players := l.world.Players()
-	states := make([]*gamev1.PlayerState, len(players))
-	for i, p := range players {
-		states[i] = &gamev1.PlayerState{
-			Id:           uint32(p.ID),
-			X:            float32(p.Pos.X),
-			Y:            float32(p.Pos.Y),
-			LastInputSeq: p.LastInputSeq,
-			Hp:           uint32(p.HP),
-			MaxHp:        uint32(p.MaxHP),
-			Xp:           uint32(p.XP),
-			XpToNext:     uint32(l.cfg.World.Loot.XPToNext(p.Level)),
-			Level:        uint32(p.Level),
-			Kills:        p.Kills,
-			Speed:        float32(p.Speed),
-			Choosing:     p.Choosing(),
-			AuraRadius:   float32(auraRadius(p)),
-			SurvivedMs:   uint32(p.Age * 1000),
-		}
-		if o := weaponOf[*Orbit](&p); o != nil {
-			c := o.Config()
-			states[i].OrbitCount = uint32(c.Count)
-			states[i].OrbitRadius = float32(c.Radius)
-			states[i].OrbitSpeed = float32(c.Speed)
-			states[i].OrbitBladeRadius = float32(c.BladeRadius)
-		}
-	}
-	enemies := l.world.Enemies()
-	enemyStates := make([]*gamev1.EnemyState, len(enemies))
-	for i, e := range enemies {
-		enemyStates[i] = &gamev1.EnemyState{
-			Id: uint32(e.ID), X: float32(e.Pos.X), Y: float32(e.Pos.Y),
-			Hp: uint32(e.HP), MaxHp: uint32(e.MaxHP),
-			Kind: gamev1.EnemyKind(e.Kind), Radius: float32(e.Radius),
-		}
-	}
-	projectiles := l.world.Projectiles()
-	projectileStates := make([]*gamev1.ProjectileState, len(projectiles))
-	for i, p := range projectiles {
-		projectileStates[i] = &gamev1.ProjectileState{Id: uint32(p.ID), X: float32(p.Pos.X), Y: float32(p.Pos.Y)}
-	}
-	gems := l.world.Gems()
-	gemStates := make([]*gamev1.GemState, len(gems))
-	for i, g := range gems {
-		gemStates[i] = &gamev1.GemState{Id: uint32(g.ID), X: float32(g.Pos.X), Y: float32(g.Pos.Y), Value: uint32(g.Value)}
-	}
-	msg := &gamev1.ServerMessage{Payload: &gamev1.ServerMessage_Snapshot{Snapshot: &gamev1.WorldSnapshot{
-		Tick:         l.world.Tick(),
-		ServerTimeMs: float64(l.now().UnixMilli()),
-		Players:      states,
-		Enemies:      enemyStates,
-		Projectiles:  projectileStates,
-		Gems:         gemStates,
-	}}}
+	// 每位玩家只收到自己畫面附近的實體（AOI），所以每人一份快照；玩家清單共用。
+	b := newSnapshotBuilder(l.world, DefaultAOI, float64(l.now().UnixMilli()))
 	for _, m := range l.members {
+		p := l.world.Player(m.id)
+		if p == nil {
+			continue
+		}
 		// Send 不會阻塞；失敗代表連線正在關閉，稍後會收到 Leave。
-		_ = m.sink.Send(msg)
+		_ = m.sink.Send(&gamev1.ServerMessage{Payload: &gamev1.ServerMessage_Snapshot{Snapshot: b.For(p.Pos)}})
 	}
-}
-
-func auraRadius(p Player) float64 {
-	if a := weaponOf[*Aura](&p); a != nil {
-		return a.Radius()
-	}
-	return 0
 }

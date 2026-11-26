@@ -243,8 +243,11 @@ func TestSnapshotIncludesEnemiesAndHP(t *testing.T) {
 	if p := s.GetPlayers()[0]; p.GetHp() != 100 || p.GetMaxHp() != 100 || p.GetLevel() != 1 || p.GetXpToNext() != 5 {
 		t.Fatalf("player = %v, want hp 100/100, level 1, xp_to_next 5", p)
 	}
-	if e := s.GetEnemies()[0]; e.GetHp() != 20 || e.GetMaxHp() != 20 {
-		t.Fatalf("enemy hp = %d/%d, want 20/20", e.GetHp(), e.GetMaxHp())
+	if e := s.GetEnemies()[0]; e.GetDamagePct() != 0 || e.GetQx() == 0 || e.GetKind() != gamev1.EnemyKind_ENEMY_KIND_GRUNT {
+		t.Fatalf("enemy = %v, want full HP grunt with quantized position", e)
+	}
+	if a := sink.all()[0].GetJoinAccepted(); a.GetPositionScale() != PositionScale || len(a.GetEnemyKinds()) == 0 {
+		t.Fatalf("JoinAccepted = %v, want position_scale and enemy kinds", a)
 	}
 	if a := sink.all()[0].GetJoinAccepted(); a.GetEnemyRadius() != 10 {
 		t.Fatalf("JoinAccepted.enemy_radius = %v, want 10", a.GetEnemyRadius())
