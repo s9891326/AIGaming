@@ -193,6 +193,8 @@ export function useGameSocket({
                 enemyRadius: v.enemyRadius,
                 projectileRadius: v.projectileRadius,
                 gemRadius: v.gemRadius,
+                enemyKindRadius: Object.fromEntries(v.enemyKinds.map((k) => [k.kind, k.radius])),
+                positionScale: v.positionScale,
               }
               game.onJoin(info)
               setJoin(info)

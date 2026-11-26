@@ -13,6 +13,8 @@ const join: JoinInfo = {
   enemyRadius: 14,
   projectileRadius: 6,
   gemRadius: 7,
+  enemyKindRadius: { 1: 14 },
+  positionScale: 10,
 }
 
 function snapshot(
