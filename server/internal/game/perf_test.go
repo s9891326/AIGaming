@@ -1,7 +1,6 @@
 package game
 
 import (
-	"fmt"
 	"math"
 	"math/rand/v2"
 	"testing"
@@ -114,5 +113,4 @@ func TestPerfReport(t *testing.T) {
 		t.Logf("%-10s snapshot %6d bytes (%5.1f KB/s at 20Hz)  enemies %4d  projectiles %3d  gems %3d",
 			sc.name, len(b), float64(len(b))*20/1024, len(s.GetEnemies()), len(s.GetProjectiles()), len(s.GetGems()))
 	}
-	fmt.Print("")
 }
