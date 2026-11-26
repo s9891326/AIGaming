@@ -23,6 +23,26 @@ export interface PlayerProgress {
   xp: number
   xpToNext: number
   kills: number
+  survivedMs: number
+}
+
+/** 旋刃參數（來自快照）。 */
+interface OrbitInfo {
+  count: number
+  radius: number
+  speed: number
+  bladeRadius: number
+}
+
+/** 一隻要畫在畫面上的敵人。kind 對應 proto 的 EnemyKind（1 普通、2 疾行者、3 巨漢、4 精英）。 */
+export interface RenderEnemy {
+  id: number
+  pos: Vec
+  hurt: boolean
+  kind: number
+  radius: number
+  hp: number
+  maxHp: number
 }
 
 /** 一個要畫在畫面上的角色。 */
@@ -37,6 +57,9 @@ export interface RenderPlayer {
   choosing: boolean
   /** 聖光環半徑，0 = 沒有。 */
   auraRadius: number
+  /** 旋刃刀刃位置（沒有旋刃時為空）與半徑。 */
+  blades: Vec[]
+  bladeRadius: number
 }
 
 export interface RenderView {
@@ -46,10 +69,10 @@ export interface RenderView {
   /** 其他玩家（位置是插值）。 */
   others: RenderPlayer[]
   /** 敵人（位置是插值；hurt = 剛被打中）。 */
-  enemies: { id: number; pos: Vec; hurt: boolean }[]
+  enemies: RenderEnemy[]
   /** 投射物與經驗寶石（位置是插值）。 */
   projectiles: { id: number; pos: Vec }[]
-  gems: { id: number; pos: Vec }[]
+  gems: { id: number; pos: Vec; value: number }[]
   /** 自己的等級、經驗、擊殺數。 */
   progress?: PlayerProgress
   tick?: number
@@ -88,7 +111,10 @@ export class GameClient {
   private readonly enemyHealth = new HealthTracker()
   private progress?: PlayerProgress
   /** 每位玩家的狀態旗標（來自最新快照）。 */
-  private flags = new Map<number, { choosing: boolean; auraRadius: number }>()
+  private flags = new Map<number, { choosing: boolean; auraRadius: number; orbit?: OrbitInfo }>()
+  /** 敵人的種類與半徑（生成後不變）。 */
+  private enemyInfo = new Map<number, { kind: number; radius: number }>()
+  private gemValues = new Map<number, number>()
   /** 升級選單開著（本地）。選完後還要等快照確認 choosing=false 才恢復送輸入。 */
   private offerOpen = false
   private selfChoosing = false
@@ -161,13 +187,36 @@ export class GameClient {
     const others = new Map<number, Vec>()
     let self: { x: number; y: number; lastInputSeq: number } | undefined
     this.flags = new Map(
-      snap.players.map((p) => [p.id, { choosing: p.choosing, auraRadius: p.auraRadius }]),
+      snap.players.map((p) => [
+        p.id,
+        {
+          choosing: p.choosing,
+          auraRadius: p.auraRadius,
+          orbit:
+            p.orbitCount > 0
+              ? {
+                  count: p.orbitCount,
+                  radius: p.orbitRadius,
+                  speed: p.orbitSpeed,
+                  bladeRadius: p.orbitBladeRadius,
+                }
+              : undefined,
+        },
+      ]),
     )
+    this.enemyInfo = new Map(snap.enemies.map((e) => [e.id, { kind: e.kind, radius: e.radius }]))
+    this.gemValues = new Map(snap.gems.map((g) => [g.id, g.value]))
     for (const p of snap.players) {
       this.health.observe(p.id, p.hp, p.maxHp, now)
       if (p.id === this.join.playerId) {
         self = p
-        this.progress = { level: p.level, xp: p.xp, xpToNext: p.xpToNext, kills: p.kills }
+        this.progress = {
+          level: p.level,
+          xp: p.xp,
+          xpToNext: p.xpToNext,
+          kills: p.kills,
+          survivedMs: p.survivedMs,
+        }
         this.selfChoosing = p.choosing
         this.predictor.setSpeed(p.speed)
       } else {
@@ -243,10 +292,23 @@ export class GameClient {
     const decay = Math.exp(-frameDt / CORRECTION_SMOOTHING_MS)
     this.correction = { x: this.correction.x * decay, y: this.correction.y * decay }
 
-    const player = (id: number, pos: Vec): RenderPlayer => {
+    // 旋刃角度 = 轉速 × 伺服器時間（與伺服器 Orbit.BladePositions 同一個公式）。
+    const serverNow = this.clock.ready ? this.clock.toServerTime(now) : 0
+    const renderTime = serverNow - INTERP_DELAY_MS
+    const player = (id: number, pos: Vec, timeMs: number): RenderPlayer => {
       const h = this.health.get(id)
       const f = this.flags.get(id)
+      const blades: Vec[] = []
+      if (f?.orbit) {
+        const o = f.orbit
+        for (let i = 0; i < o.count; i++) {
+          const a = (o.speed * timeMs) / 1000 + (i * 2 * Math.PI) / o.count
+          blades.push({ x: pos.x + Math.cos(a) * o.radius, y: pos.y + Math.sin(a) * o.radius })
+        }
+      }
       return {
+        blades,
+        bladeRadius: f?.orbit?.bladeRadius ?? 0,
         id,
         pos,
         hp: h?.hp ?? 0,
@@ -263,10 +325,11 @@ export class GameClient {
       // 預測位置每個 tick 才變一次；在上一個與目前位置之間依時間比例平滑。
       const alpha = Math.min(1, Math.max(0, (now - this.lastStepAt) / this.tickMs))
       const smooth = this.prevPos ? lerpVec(this.prevPos, pos, alpha) : pos
-      self = player(this.join.playerId, {
-        x: smooth.x + this.correction.x,
-        y: smooth.y + this.correction.y,
-      })
+      self = player(
+        this.join.playerId,
+        { x: smooth.x + this.correction.x, y: smooth.y + this.correction.y },
+        serverNow, // 自己是預測的「現在」位置
+      )
     }
 
     const others: RenderPlayer[] = []
@@ -274,14 +337,26 @@ export class GameClient {
     const projectiles: RenderView['projectiles'] = []
     const gems: RenderView['gems'] = []
     if (this.clock.ready) {
-      const renderTime = this.clock.toServerTime(now) - INTERP_DELAY_MS
-      for (const [id, p] of this.buffer.sample(renderTime)) others.push(player(id, p))
+      // 其他人與敵人是插值的「過去」位置，旋刃角度也用同一個時間。
+      for (const [id, p] of this.buffer.sample(renderTime)) others.push(player(id, p, renderTime))
       for (const [id, p] of this.enemyBuffer.sample(renderTime)) {
-        enemies.push({ id, pos: p, hurt: this.enemyHealth.isHurt(id, now) })
+        const info = this.enemyInfo.get(id)
+        const h = this.enemyHealth.get(id)
+        enemies.push({
+          id,
+          pos: p,
+          hurt: this.enemyHealth.isHurt(id, now),
+          kind: info?.kind ?? 1,
+          radius: info?.radius ?? this.join?.enemyRadius ?? 14,
+          hp: h?.hp ?? 0,
+          maxHp: h?.maxHp ?? 0,
+        })
       }
       for (const [id, p] of this.projectileBuffer.sample(renderTime))
         projectiles.push({ id, pos: p })
-      for (const [id, p] of this.gemBuffer.sample(renderTime)) gems.push({ id, pos: p })
+      for (const [id, p] of this.gemBuffer.sample(renderTime)) {
+        gems.push({ id, pos: p, value: this.gemValues.get(id) ?? 1 })
+      }
     }
 
     return {
@@ -311,6 +386,8 @@ export class GameClient {
     this.enemyHealth.clear()
     this.progress = undefined
     this.flags = new Map()
+    this.enemyInfo = new Map()
+    this.gemValues = new Map()
     this.offerOpen = false
     this.selfChoosing = false
     this.clock.reset()

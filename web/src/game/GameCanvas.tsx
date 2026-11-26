@@ -34,6 +34,10 @@ const COLORS = {
   gem: '#5ad1e6',
   gemEdge: '#2b8fa3',
   xp: '#5ad1e6',
+  gemBig: '#ffd36b',
+  gemBigEdge: '#b8902f',
+  blade: '#cfd8ff',
+  bladeEdge: '#7f8bc2',
   aura: 'rgba(255, 211, 107, 0.12)',
   auraEdge: 'rgba(255, 211, 107, 0.45)',
 }
@@ -89,12 +93,14 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
       }
 
       // 由下而上：寶石 → 敵人 → 投射物 → 玩家。
-      const gr = v.join?.gemRadius ?? 7
-      ctx.fillStyle = COLORS.gem
-      ctx.strokeStyle = COLORS.gemEdge
+      const gr0 = v.join?.gemRadius ?? 7
       ctx.lineWidth = 1.5
       for (const g of v.gems) {
-        // 菱形
+        // 菱形；高價值（巨漢、精英掉的）比較大、金色
+        const big = g.value > 1
+        const gr = big ? gr0 * 1.6 : gr0
+        ctx.fillStyle = big ? COLORS.gemBig : COLORS.gem
+        ctx.strokeStyle = big ? COLORS.gemBigEdge : COLORS.gemEdge
         ctx.beginPath()
         ctx.moveTo(g.pos.x, g.pos.y - gr)
         ctx.lineTo(g.pos.x + gr * 0.75, g.pos.y)
@@ -105,15 +111,24 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         ctx.stroke()
       }
 
-      const er = v.join?.enemyRadius ?? 14
-      ctx.strokeStyle = COLORS.enemyEdge
-      ctx.lineWidth = 2
       for (const e of v.enemies) {
-        ctx.fillStyle = e.hurt ? COLORS.hurt : COLORS.enemy
+        const style = ENEMY_STYLE[e.kind] ?? ENEMY_STYLE[1]
+        ctx.fillStyle = e.hurt ? COLORS.hurt : style.fill
+        ctx.strokeStyle = style.edge
+        ctx.lineWidth = e.kind === 4 ? 4 : 2
         ctx.beginPath()
-        ctx.arc(e.pos.x, e.pos.y, er, 0, Math.PI * 2)
+        ctx.arc(e.pos.x, e.pos.y, e.radius, 0, Math.PI * 2)
         ctx.fill()
         ctx.stroke()
+        // 耐打的敵人（巨漢、精英）受傷後頭上顯示血條
+        if ((e.kind === 3 || e.kind === 4) && e.maxHp > 0 && e.hp < e.maxHp) {
+          const w = e.radius * 2
+          const ratio = Math.max(0, e.hp / e.maxHp)
+          ctx.fillStyle = 'rgba(0,0,0,0.6)'
+          ctx.fillRect(e.pos.x - w / 2, e.pos.y - e.radius - 8, w, 4)
+          ctx.fillStyle = COLORS.hpLow
+          ctx.fillRect(e.pos.x - w / 2, e.pos.y - e.radius - 8, w * ratio, 4)
+        }
       }
 
       const pr = v.join?.projectileRadius ?? 6
@@ -137,6 +152,19 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         ctx.arc(p.pos.x, p.pos.y, p.auraRadius, 0, Math.PI * 2)
         ctx.fill()
         ctx.stroke()
+      }
+
+      // 旋刃
+      ctx.fillStyle = COLORS.blade
+      ctx.strokeStyle = COLORS.bladeEdge
+      ctx.lineWidth = 2
+      for (const p of [...v.others, ...(v.self ? [v.self] : [])]) {
+        for (const b of p.blades) {
+          ctx.beginPath()
+          ctx.arc(b.x, b.y, p.bladeRadius, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.stroke()
+        }
       }
 
       ctx.font = '12px system-ui, sans-serif'
@@ -202,6 +230,10 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         ctx.font = '12px ui-monospace, Consolas, monospace'
         ctx.fillStyle = COLORS.muted
         ctx.fillText(`XP ${prog.xp} / ${prog.xpToNext}  ·  擊殺 ${prog.kills}`, VIEW_W - 12, h + 36)
+        ctx.font = 'bold 16px ui-monospace, Consolas, monospace'
+        ctx.textAlign = 'center'
+        ctx.fillStyle = COLORS.text
+        ctx.fillText(formatClock(prog.survivedMs), VIEW_W / 2, h + 22)
       }
 
       // HUD（固定在畫面左上，不跟相機移動）
@@ -251,6 +283,20 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
       data-testid="game-canvas"
     />
   )
+}
+
+/** 各種敵人的顏色（1 普通、2 疾行者、3 巨漢、4 精英）。 */
+const ENEMY_STYLE: Record<number, { fill: string; edge: string }> = {
+  1: { fill: '#5f9e6e', edge: '#3c6b48' },
+  2: { fill: '#c9b458', edge: '#8a7a2e' },
+  3: { fill: '#9e4a4a', edge: '#5e2626' },
+  4: { fill: '#8e5fc9', edge: '#e0c2ff' },
+}
+
+/** 存活時間 mm:ss */
+function formatClock(ms: number): string {
+  const s = Math.floor(ms / 1000)
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
 /** 只畫相機看得到的格線，世界再大也不會變慢。 */
