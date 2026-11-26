@@ -103,6 +103,7 @@ type World struct {
 
 	enemies     []*Enemy
 	nextEnemyID EnemyID
+	grid        enemyGrid // 敵人的空間格子，每個 tick 敵人移動後重建
 
 	projectiles      []*Projectile
 	nextProjectileID ProjectileID
@@ -240,7 +241,9 @@ func (w *World) Step(dt float64) StepResult {
 	}
 	w.spawnEnemies(active, dt)
 	w.moveEnemies(active, dt)
+	w.grid.rebuild(w)
 	w.separateEnemies()
+	w.grid.rebuild(w) // 分離後位置變了，武器 / 投射物 / 接觸傷害用最新的格子
 	w.updateWeapons(active, dt)
 	w.updateProjectiles(dt) // 打死的敵人在接觸傷害之前就移除
 	w.updateGems(active, dt)
