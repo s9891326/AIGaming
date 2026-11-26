@@ -242,6 +242,14 @@ func (l *Loop) broadcast() {
 			Speed:        float32(p.Speed),
 			Choosing:     p.Choosing(),
 			AuraRadius:   float32(auraRadius(p)),
+			SurvivedMs:   uint32(p.Age * 1000),
+		}
+		if o := weaponOf[*Orbit](&p); o != nil {
+			c := o.Config()
+			states[i].OrbitCount = uint32(c.Count)
+			states[i].OrbitRadius = float32(c.Radius)
+			states[i].OrbitSpeed = float32(c.Speed)
+			states[i].OrbitBladeRadius = float32(c.BladeRadius)
 		}
 	}
 	enemies := l.world.Enemies()
@@ -250,6 +258,7 @@ func (l *Loop) broadcast() {
 		enemyStates[i] = &gamev1.EnemyState{
 			Id: uint32(e.ID), X: float32(e.Pos.X), Y: float32(e.Pos.Y),
 			Hp: uint32(e.HP), MaxHp: uint32(e.MaxHP),
+			Kind: gamev1.EnemyKind(e.Kind), Radius: float32(e.Radius),
 		}
 	}
 	projectiles := l.world.Projectiles()

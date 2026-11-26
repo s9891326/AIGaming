@@ -13,8 +13,13 @@ type EnemyID uint32
 // Enemy 是一隻敵人。
 type Enemy struct {
 	ID        EnemyID
+	Kind      EnemyKind
 	Pos       Vec2
 	HP, MaxHP int
+	Speed     float64
+	Radius    float64
+	Damage    int // 撞到玩家的傷害
+	XP        int // 死亡時掉落的經驗值
 }
 
 // CombatConfig 是敵人與戰鬥相關的參數。
@@ -35,6 +40,9 @@ type CombatConfig struct {
 	SpawnRateMax    float64
 	// SpawnDistance 是生成點與玩家的距離。畫面 960×640 的半對角線約 577，所以要大於它才會在畫面外。
 	SpawnDistance float64
+
+	// Waves 是波次表（種類、速率、HP 成長、精英）。nil 時使用上面的 SpawnRate* 與 Enemy* 欄位（單一種敵人）。
+	Waves *WaveConfig
 }
 
 // DefaultCombatConfig 是預設的戰鬥參數。
@@ -51,6 +59,7 @@ var DefaultCombatConfig = CombatConfig{
 	SpawnRateGrowth: 0.06,
 	SpawnRateMax:    5,
 	SpawnDistance:   650,
+	Waves:           &DefaultWaves,
 }
 
 // Death 是一位玩家死亡的紀錄。
@@ -77,7 +86,11 @@ func (c CombatConfig) SpawnRate(age float64) float64 {
 func (w *World) spawnEnemies(players []*Player, dt float64) {
 	c := w.cfg.Combat
 	for _, p := range players {
-		p.spawnAccum += c.SpawnRate(p.Age) * dt
+		if def, ok := w.eliteDue(p); ok && len(w.enemies) < c.MaxEnemies {
+			w.spawnEnemy(def, p.Pos)
+		}
+		rate, pick := w.spawnPlan(p.Age)
+		p.spawnAccum += rate * dt
 		for p.spawnAccum >= 1 {
 			if len(w.enemies) >= c.MaxEnemies {
 				// 到上限就丟掉累積量，避免之後一次湧出一大群。
@@ -85,23 +98,33 @@ func (w *World) spawnEnemies(players []*Player, dt float64) {
 				break
 			}
 			p.spawnAccum--
-			w.enemies = append(w.enemies, &Enemy{
-				ID:    w.nextEnemyID,
-				Pos:   w.spawnPoint(p.Pos),
-				HP:    c.EnemyHP,
-				MaxHP: c.EnemyHP,
-			})
-			w.nextEnemyID++
+			w.spawnEnemy(pick(), p.Pos)
 		}
 	}
+}
+
+func (w *World) spawnEnemy(def EnemyKindDef, near Vec2) *Enemy {
+	e := &Enemy{
+		ID:     w.nextEnemyID,
+		Kind:   def.Kind,
+		Pos:    w.spawnPoint(near, def.Radius),
+		HP:     def.HP,
+		MaxHP:  def.HP,
+		Speed:  def.Speed,
+		Radius: def.Radius,
+		Damage: def.Damage,
+		XP:     def.XP,
+	}
+	w.nextEnemyID++
+	w.enemies = append(w.enemies, e)
+	return e
 }
 
 // spawnPoint 在 center 周圍 SpawnDistance 的隨機方向找生成點。
 // 玩家靠近世界邊緣時，有些方向會出界：哪一軸出界就把那一軸的方向反過來（鏡像），
 // 所以生成點仍然剛好在 SpawnDistance 外，而不是被夾到玩家身邊。
 // 只有世界小於 2 × SpawnDistance 時鏡像也可能出界，最後再夾回世界內。
-func (w *World) spawnPoint(center Vec2) Vec2 {
-	r := w.cfg.Combat.EnemyRadius
+func (w *World) spawnPoint(center Vec2, r float64) Vec2 {
 	a := w.rng.Float64() * 2 * math.Pi
 	dx := math.Cos(a) * w.cfg.Combat.SpawnDistance
 	dy := math.Sin(a) * w.cfg.Combat.SpawnDistance
@@ -116,8 +139,8 @@ func (w *World) spawnPoint(center Vec2) Vec2 {
 
 // moveEnemies 讓每隻敵人朝最近的玩家直線前進。
 func (w *World) moveEnemies(players []*Player, dt float64) {
-	step := w.cfg.Combat.EnemySpeed * dt
 	for _, e := range w.enemies {
+		step := e.Speed * dt
 		target := nearestPlayer(players, e.Pos)
 		d := dist(target.Pos, e.Pos)
 		if d < 1e-9 {
@@ -132,12 +155,11 @@ func (w *World) moveEnemies(players []*Player, dt float64) {
 // 不保證完全不重疊，但足以讓一大群敵人散開成一團而不是疊成一點。
 // 目前是 O(n²)，n ≤ 300 時一個 tick 約 4.5 萬次距離計算；#10 會換成空間格子。
 func (w *World) separateEnemies() {
-	r := w.cfg.Combat.EnemyRadius
-	minD := 2 * r
 	for i := range w.enemies {
 		a := w.enemies[i]
 		for j := i + 1; j < len(w.enemies); j++ {
 			b := w.enemies[j]
+			minD := a.Radius + b.Radius
 			dx, dy := b.Pos.X-a.Pos.X, b.Pos.Y-a.Pos.Y
 			d := math.Hypot(dx, dy)
 			if d >= minD {
@@ -157,7 +179,7 @@ func (w *World) separateEnemies() {
 		}
 	}
 	for _, e := range w.enemies {
-		e.Pos = w.clampToWorld(e.Pos, r)
+		e.Pos = w.clampToWorld(e.Pos, e.Radius)
 	}
 }
 
@@ -165,15 +187,18 @@ func (w *World) separateEnemies() {
 // 每次受傷後有短暫無敵，所以被一群敵人包圍時也是每 HurtInvuln 秒扣一次，而不是每個 tick 扣好幾次。
 func (w *World) applyContactDamage(players []*Player) []Death {
 	c := w.cfg.Combat
-	reach := w.cfg.PlayerRadius + c.EnemyRadius
 	var deaths []Death
 	for _, p := range players {
 		// 用容許誤差比較：0.5 − 0.05 × 10 在浮點數下是極小的正數而不是 0，
 		// 直接比 > 0 會讓每次無敵多一個 tick。
-		if p.Invuln > timeEps || !w.touchingEnemy(p.Pos, reach) {
+		if p.Invuln > timeEps {
 			continue
 		}
-		p.HP = max(0, p.HP-c.ContactDamage)
+		dmg := w.contactDamage(p.Pos)
+		if dmg == 0 {
+			continue
+		}
+		p.HP = max(0, p.HP-dmg)
 		p.Invuln = c.HurtInvuln
 		if p.HP == 0 {
 			deaths = append(deaths, Death{ID: p.ID, SurvivedMs: uint32(p.Age * 1000), Kills: p.Kills})
@@ -183,13 +208,15 @@ func (w *World) applyContactDamage(players []*Player) []Death {
 	return deaths
 }
 
-func (w *World) touchingEnemy(pos Vec2, reach float64) bool {
+// contactDamage 回傳碰到 pos 的敵人中最高的傷害（被巨漢和普通敵人同時撞到時算巨漢的）；沒碰到回傳 0。
+func (w *World) contactDamage(pos Vec2) int {
+	best := 0
 	for _, e := range w.enemies {
-		if dist(e.Pos, pos) < reach {
-			return true
+		if e.HP > 0 && dist(e.Pos, pos) < w.cfg.PlayerRadius+e.Radius {
+			best = max(best, e.Damage)
 		}
 	}
-	return false
+	return best
 }
 
 func nearestPlayer(players []*Player, pos Vec2) *Player {

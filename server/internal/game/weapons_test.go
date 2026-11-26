@@ -163,3 +163,85 @@ func TestWeaponsKillEnemiesEndToEnd(t *testing.T) {
 	t.Logf("20s: kills=%d level=%d xp=%d enemies alive=%d gems on ground=%d",
 		p.Kills, p.Level, p.XP, len(w.Enemies()), len(w.Gems()))
 }
+
+func TestOrbitBladesRotateAndHit(t *testing.T) {
+	w, p := weaponWorld()
+	p.Weapons = []Weapon{NewOrbit(DefaultOrbit)}
+	o := weaponOf[*Orbit](p)
+
+	c := DefaultOrbit
+
+	// t=0 時刀刃平均分布，第一片在正右方。
+	b := o.BladePositions(p.Pos, 0)
+	if len(b) != c.Count || !near(b[0].X, p.Pos.X+c.Radius) || !near(b[0].Y, p.Pos.Y) {
+		t.Fatalf("blades at t=0: %+v", b)
+	}
+	for i := range b {
+		if !near(dist(b[i], p.Pos), c.Radius) {
+			t.Fatalf("blade %d not on the orbit: %+v", i, b[i])
+		}
+	}
+
+	// 放一隻敵人在軌道上：2 秒內刀刃經過約 Count × 轉數 次，每次命中至少間隔 HitInterval。
+	e := w.addEnemy(Vec2{p.Pos.X, p.Pos.Y + c.Radius})
+	e.HP, e.MaxHP = 10000, 10000
+	stepFor(w, 2)
+	hits := (10000 - e.HP) / c.Damage
+	passes := float64(c.Count) * c.Speed * 2 / (2 * math.Pi)
+	if float64(hits) < passes-1.5 || float64(hits) > passes+1.5 || float64(hits) > 2/c.HitInterval+1 {
+		t.Fatalf("enemy hit %d times in 2s, want about %.1f (blade passes) and ≤ %.0f (hit interval)", hits, passes, 2/c.HitInterval+1)
+	}
+}
+
+func TestOrbitKillsAreAttributed(t *testing.T) {
+	w, p := weaponWorld()
+	p.Weapons = []Weapon{NewOrbit(DefaultOrbit)}
+	w.addEnemy(Vec2{p.Pos.X + DefaultOrbit.Radius, p.Pos.Y}) // 在軌道上，HP 20
+	stepFor(w, 3)
+	if p.KillsBy["orbit"] != 1 || p.Kills != 1 {
+		t.Fatalf("kills by %v (total %d), want 1 by orbit", p.KillsBy, p.Kills)
+	}
+}
+
+func TestPierceHitsMultipleEnemies(t *testing.T) {
+	w, p := weaponWorld()
+	p.Weapons = nil
+	a := w.addEnemy(Vec2{p.Pos.X + 100, p.Pos.Y})
+	b := w.addEnemy(Vec2{p.Pos.X + 160, p.Pos.Y})
+	c := w.addEnemy(Vec2{p.Pos.X + 220, p.Pos.Y})
+	for _, e := range []*Enemy{a, b, c} {
+		e.HP, e.MaxHP = 100, 100
+	}
+	w.spawnProjectile(Projectile{Owner: p.ID, Source: "magic_bolt", Pos: p.Pos, Vel: Vec2{450, 0},
+		Damage: 10, Radius: 6, TTL: 2, Pierce: 1})
+
+	stepFor(w, 1)
+
+	if a.HP != 90 || b.HP != 90 || c.HP != 100 {
+		t.Fatalf("hp a=%d b=%d c=%d; pierce 1 should hit the first two only", a.HP, b.HP, c.HP)
+	}
+	if len(w.Projectiles()) != 0 {
+		t.Fatal("projectile should be gone after using its pierce")
+	}
+}
+
+func TestMightScalesDamage(t *testing.T) {
+	w, p := weaponWorld()
+	p.Might = 1.15
+	e := w.addEnemy(Vec2{1, 1})
+	e.HP, e.MaxHP = 100, 100
+	w.damageEnemy(e, 20, p.ID, "test")
+	if e.HP != 77 { // 20 × 1.15 = 23
+		t.Fatalf("hp = %d, want 77", e.HP)
+	}
+}
+
+func TestEliteDropsBigGem(t *testing.T) {
+	w, p := weaponWorld()
+	e := w.spawnEnemy(DefaultWaves.Kinds[KindElite], Vec2{100, 100})
+	w.damageEnemy(e, 10000, p.ID, "test")
+	gems := w.Gems()
+	if len(gems) != 1 || gems[0].Value != 15 {
+		t.Fatalf("gems = %+v, want one gem worth 15", gems)
+	}
+}
