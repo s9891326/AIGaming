@@ -1,4 +1,5 @@
 import type { WorldSnapshot } from '../gen/game/v1/game_pb'
+import { HealthTracker } from './health'
 import { ServerClock, SnapshotBuffer } from './interpolation'
 import { Predictor } from './prediction'
 import { lerpVec, type SimConfig, type Vec } from './sim'
@@ -11,14 +12,27 @@ export interface JoinInfo {
   tickRate: number
   playerRadius: number
   playerSpeed: number
+  enemyRadius: number
+}
+
+/** 一個要畫在畫面上的角色。 */
+export interface RenderPlayer {
+  id: number
+  pos: Vec
+  hp: number
+  maxHp: number
+  /** 剛受傷（畫受傷閃爍）。 */
+  hurt: boolean
 }
 
 export interface RenderView {
   join?: JoinInfo
-  /** 本地玩家的繪製位置（預測 + 平滑）。 */
-  self?: Vec
-  /** 其他玩家的繪製位置（插值）。 */
-  others: { id: number; pos: Vec }[]
+  /** 本地玩家（位置是預測 + 平滑；血量來自最新快照）。 */
+  self?: RenderPlayer
+  /** 其他玩家（位置是插值）。 */
+  others: RenderPlayer[]
+  /** 敵人（位置是插值）。 */
+  enemies: { id: number; pos: Vec }[]
   tick?: number
   pendingInputs: number
   /** 最近一次伺服器校正的距離（遊戲單位），0 代表預測完全正確。 */
@@ -48,7 +62,9 @@ export class GameClient {
   private tickMs = 50
   private predictor?: Predictor
   private readonly buffer = new SnapshotBuffer()
+  private readonly enemyBuffer = new SnapshotBuffer()
   private readonly clock = new ServerClock()
+  private readonly health = new HealthTracker()
 
   private move: Vec = { x: 0, y: 0 }
   private seq = 0
@@ -106,10 +122,16 @@ export class GameClient {
     const others = new Map<number, Vec>()
     let self: { x: number; y: number; lastInputSeq: number } | undefined
     for (const p of snap.players) {
+      this.health.observe(p.id, p.hp, p.maxHp, now)
       if (p.id === this.join.playerId) self = p
       else others.set(p.id, { x: p.x, y: p.y })
     }
+    this.health.retain(new Set(snap.players.map((p) => p.id)))
     this.buffer.push({ time, entities: others })
+    this.enemyBuffer.push({
+      time,
+      entities: new Map(snap.enemies.map((e) => [e.id, { x: e.x, y: e.y }])),
+    })
 
     if (!self) return
     const before = this.predictor.pos
@@ -167,25 +189,36 @@ export class GameClient {
     const decay = Math.exp(-frameDt / CORRECTION_SMOOTHING_MS)
     this.correction = { x: this.correction.x * decay, y: this.correction.y * decay }
 
-    let self: Vec | undefined
+    const player = (id: number, pos: Vec): RenderPlayer => {
+      const h = this.health.get(id)
+      return { id, pos, hp: h?.hp ?? 0, maxHp: h?.maxHp ?? 0, hurt: this.health.isHurt(id, now) }
+    }
+
+    let self: RenderPlayer | undefined
     const pos = this.predictor?.pos
-    if (pos) {
+    if (pos && this.join) {
       // 預測位置每個 tick 才變一次；在上一個與目前位置之間依時間比例平滑。
       const alpha = Math.min(1, Math.max(0, (now - this.lastStepAt) / this.tickMs))
       const smooth = this.prevPos ? lerpVec(this.prevPos, pos, alpha) : pos
-      self = { x: smooth.x + this.correction.x, y: smooth.y + this.correction.y }
+      self = player(this.join.playerId, {
+        x: smooth.x + this.correction.x,
+        y: smooth.y + this.correction.y,
+      })
     }
 
-    const others: RenderView['others'] = []
+    const others: RenderPlayer[] = []
+    const enemies: RenderView['enemies'] = []
     if (this.clock.ready) {
       const renderTime = this.clock.toServerTime(now) - INTERP_DELAY_MS
-      for (const [id, p] of this.buffer.sample(renderTime)) others.push({ id, pos: p })
+      for (const [id, p] of this.buffer.sample(renderTime)) others.push(player(id, p))
+      for (const [id, p] of this.enemyBuffer.sample(renderTime)) enemies.push({ id, pos: p })
     }
 
     return {
       join: this.join,
       self,
       others,
+      enemies,
       tick: this.lastTick,
       pendingInputs: this.predictor?.pendingCount ?? 0,
       lastCorrection: this.lastCorrection,
@@ -199,7 +232,9 @@ export class GameClient {
     this.sim = undefined
     this.predictor = undefined
     this.buffer.clear()
+    this.enemyBuffer.clear()
     this.clock.reset()
+    this.health.clear()
     this.seq = 0
     this.prevPos = undefined
     this.correction = { x: 0, y: 0 }

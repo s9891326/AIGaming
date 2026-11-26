@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/game.proto.
  */
 export const file_game_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCK6AQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SABCCQoHcGF5bG9hZCI4CgdXZWxjb21lEhUKDWNvbm5lY3Rpb25faWQYASABKAkSFgoOc2VydmVyX3ZlcnNpb24YAiABKAkiHgoEUGluZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoASI2CgRQb25nEhYKDmNsaWVudF90aW1lX21zGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgBIg0KC0pvaW5SZXF1ZXN0IowBCgxKb2luQWNjZXB0ZWQSEQoJcGxheWVyX2lkGAEgASgNEhMKC3dvcmxkX3dpZHRoGAIgASgCEhQKDHdvcmxkX2hlaWdodBgDIAEoAhIRCgl0aWNrX3JhdGUYBCABKA0SFQoNcGxheWVyX3JhZGl1cxgFIAEoAhIUCgxwbGF5ZXJfc3BlZWQYBiABKAIiOgoLUGxheWVySW5wdXQSCwoDc2VxGAEgASgNEg4KBm1vdmVfeBgCIAEoAhIOCgZtb3ZlX3kYAyABKAIiXAoNV29ybGRTbmFwc2hvdBIMCgR0aWNrGAEgASgNEhYKDnNlcnZlcl90aW1lX21zGAIgASgBEiUKB3BsYXllcnMYAyADKAsyFC5nYW1lLnYxLlBsYXllclN0YXRlIkcKC1BsYXllclN0YXRlEgoKAmlkGAEgASgNEgkKAXgYAiABKAISCQoBeRgDIAEoAhIWCg5sYXN0X2lucHV0X3NlcRgEIAEoDUIsWiphaWdhbWluZy9zZXJ2ZXIvaW50ZXJuYWwvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw");
+  fileDesc("ChJnYW1lL3YxL2dhbWUucHJvdG8SB2dhbWUudjEihgEKDUNsaWVudE1lc3NhZ2USHQoEcGluZxgBIAEoCzINLmdhbWUudjEuUGluZ0gAEiQKBGpvaW4YAiABKAsyFC5nYW1lLnYxLkpvaW5SZXF1ZXN0SAASJQoFaW5wdXQYAyABKAsyFC5nYW1lLnYxLlBsYXllcklucHV0SABCCQoHcGF5bG9hZCLiAQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASHQoEcG9uZxgCIAEoCzINLmdhbWUudjEuUG9uZ0gAEi4KDWpvaW5fYWNjZXB0ZWQYAyABKAsyFS5nYW1lLnYxLkpvaW5BY2NlcHRlZEgAEioKCHNuYXBzaG90GAQgASgLMhYuZ2FtZS52MS5Xb3JsZFNuYXBzaG90SAASJgoJZ2FtZV9vdmVyGAUgASgLMhEuZ2FtZS52MS5HYW1lT3ZlckgAQgkKB3BheWxvYWQiOAoHV2VsY29tZRIVCg1jb25uZWN0aW9uX2lkGAEgASgJEhYKDnNlcnZlcl92ZXJzaW9uGAIgASgJIh4KBFBpbmcSFgoOY2xpZW50X3RpbWVfbXMYASABKAEiNgoEUG9uZxIWCg5jbGllbnRfdGltZV9tcxgBIAEoARIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoASINCgtKb2luUmVxdWVzdCKiAQoMSm9pbkFjY2VwdGVkEhEKCXBsYXllcl9pZBgBIAEoDRITCgt3b3JsZF93aWR0aBgCIAEoAhIUCgx3b3JsZF9oZWlnaHQYAyABKAISEQoJdGlja19yYXRlGAQgASgNEhUKDXBsYXllcl9yYWRpdXMYBSABKAISFAoMcGxheWVyX3NwZWVkGAYgASgCEhQKDGVuZW15X3JhZGl1cxgHIAEoAiI6CgtQbGF5ZXJJbnB1dBILCgNzZXEYASABKA0SDgoGbW92ZV94GAIgASgCEg4KBm1vdmVfeRgDIAEoAiKCAQoNV29ybGRTbmFwc2hvdBIMCgR0aWNrGAEgASgNEhYKDnNlcnZlcl90aW1lX21zGAIgASgBEiUKB3BsYXllcnMYAyADKAsyFC5nYW1lLnYxLlBsYXllclN0YXRlEiQKB2VuZW1pZXMYBCADKAsyEy5nYW1lLnYxLkVuZW15U3RhdGUiYwoLUGxheWVyU3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF5GAMgASgCEhYKDmxhc3RfaW5wdXRfc2VxGAQgASgNEgoKAmhwGAUgASgNEg4KBm1heF9ocBgGIAEoDSIuCgpFbmVteVN0YXRlEgoKAmlkGAEgASgNEgkKAXgYAiABKAISCQoBeRgDIAEoAiIuCghHYW1lT3ZlchITCgtzdXJ2aXZlZF9tcxgBIAEoDRINCgVraWxscxgCIAEoDUIsWiphaWdhbWluZy9zZXJ2ZXIvaW50ZXJuYWwvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw");
 
 /**
  * ClientMessage 是客戶端送給伺服器的信封。
@@ -86,6 +86,12 @@ export type ServerMessage = Message<"game.v1.ServerMessage"> & {
      */
     value: WorldSnapshot;
     case: "snapshot";
+  } | {
+    /**
+     * @generated from field: game.v1.GameOver game_over = 5;
+     */
+    value: GameOver;
+    case: "gameOver";
   } | { case: undefined; value?: undefined };
 };
 
@@ -235,6 +241,13 @@ export type JoinAccepted = Message<"game.v1.JoinAccepted"> & {
    * @generated from field: float player_speed = 6;
    */
   playerSpeed: number;
+
+  /**
+   * 敵人半徑（遊戲單位），用於繪製。
+   *
+   * @generated from field: float enemy_radius = 7;
+   */
+  enemyRadius: number;
 };
 
 /**
@@ -304,6 +317,11 @@ export type WorldSnapshot = Message<"game.v1.WorldSnapshot"> & {
    * @generated from field: repeated game.v1.PlayerState players = 3;
    */
   players: PlayerState[];
+
+  /**
+   * @generated from field: repeated game.v1.EnemyState enemies = 4;
+   */
+  enemies: EnemyState[];
 };
 
 /**
@@ -342,6 +360,18 @@ export type PlayerState = Message<"game.v1.PlayerState"> & {
    * @generated from field: uint32 last_input_seq = 4;
    */
   lastInputSeq: number;
+
+  /**
+   * 目前血量與上限。
+   *
+   * @generated from field: uint32 hp = 5;
+   */
+  hp: number;
+
+  /**
+   * @generated from field: uint32 max_hp = 6;
+   */
+  maxHp: number;
 };
 
 /**
@@ -350,4 +380,62 @@ export type PlayerState = Message<"game.v1.PlayerState"> & {
  */
 export const PlayerStateSchema: GenMessage<PlayerState> = /*@__PURE__*/
   messageDesc(file_game_v1_game, 9);
+
+/**
+ * EnemyState 是快照中單一敵人的狀態。
+ *
+ * @generated from message game.v1.EnemyState
+ */
+export type EnemyState = Message<"game.v1.EnemyState"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: float x = 2;
+   */
+  x: number;
+
+  /**
+   * @generated from field: float y = 3;
+   */
+  y: number;
+};
+
+/**
+ * Describes the message game.v1.EnemyState.
+ * Use `create(EnemyStateSchema)` to create a new message.
+ */
+export const EnemyStateSchema: GenMessage<EnemyState> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 10);
+
+/**
+ * GameOver 在自己的角色血量歸零時送出。之後不再收到快照，
+ * 想再玩就重新送 JoinRequest（會以新角色加入）。
+ *
+ * @generated from message game.v1.GameOver
+ */
+export type GameOver = Message<"game.v1.GameOver"> & {
+  /**
+   * 這個角色存活的時間（毫秒）。
+   *
+   * @generated from field: uint32 survived_ms = 1;
+   */
+  survivedMs: number;
+
+  /**
+   * 擊殺數。
+   *
+   * @generated from field: uint32 kills = 2;
+   */
+  kills: number;
+};
+
+/**
+ * Describes the message game.v1.GameOver.
+ * Use `create(GameOverSchema)` to create a new message.
+ */
+export const GameOverSchema: GenMessage<GameOver> = /*@__PURE__*/
+  messageDesc(file_game_v1_game, 11);
 

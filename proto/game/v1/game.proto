@@ -23,6 +23,7 @@ message ServerMessage {
     Pong pong = 2;
     JoinAccepted join_accepted = 3;
     WorldSnapshot snapshot = 4;
+    GameOver game_over = 5;
   }
 }
 
@@ -66,6 +67,8 @@ message JoinAccepted {
   float player_radius = 5;
   // 角色移動速度（單位 / 秒），客戶端預測用，必須與伺服器算法一致。
   float player_speed = 6;
+  // 敵人半徑（遊戲單位），用於繪製。
+  float enemy_radius = 7;
 }
 
 // PlayerInput 代表「往這個方向移動一個 tick（1 / tick_rate 秒）」。
@@ -87,6 +90,7 @@ message WorldSnapshot {
   // 產生快照時伺服器的 Unix 時間（毫秒）。
   double server_time_ms = 2;
   repeated PlayerState players = 3;
+  repeated EnemyState enemies = 4;
 }
 
 // PlayerState 是快照中單一角色的狀態。
@@ -97,4 +101,23 @@ message PlayerState {
   float y = 3;
   // 最後一個已套用的 PlayerInput.seq。
   uint32 last_input_seq = 4;
+  // 目前血量與上限。
+  uint32 hp = 5;
+  uint32 max_hp = 6;
+}
+
+// EnemyState 是快照中單一敵人的狀態。
+message EnemyState {
+  uint32 id = 1;
+  float x = 2;
+  float y = 3;
+}
+
+// GameOver 在自己的角色血量歸零時送出。之後不再收到快照，
+// 想再玩就重新送 JoinRequest（會以新角色加入）。
+message GameOver {
+  // 這個角色存活的時間（毫秒）。
+  uint32 survived_ms = 1;
+  // 擊殺數。
+  uint32 kills = 2;
 }

@@ -163,3 +163,86 @@ func TestCommandsAfterStopDoNotBlock(t *testing.T) {
 		t.Fatal("enqueue blocked after loop stopped")
 	}
 }
+
+func TestDeathSendsGameOverAndAllowsRejoin(t *testing.T) {
+	// 很快就會死的設定：敵人生成在旁邊、一碰就死、沒有保護時間。
+	cfg := LoopConfig{TickRate: 100, World: WorldConfig{
+		Width: 1000, Height: 600, PlayerSpeed: 100, PlayerRadius: 10,
+		Combat: CombatConfig{
+			PlayerMaxHP: 10, ContactDamage: 10, HurtInvuln: 0.5,
+			EnemySpeed: 500, EnemyRadius: 10, MaxEnemies: 10,
+			SpawnRateBase: 50, SpawnRateMax: 50, SpawnDistance: 50,
+		},
+	}}
+	l := NewLoop(slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	go l.Run(ctx)
+	t.Cleanup(func() { cancel(); <-l.done })
+
+	sink := &fakeSink{}
+	l.Join("conn-a", sink)
+
+	var over *gamev1.GameOver
+	eventually(t, "GameOver", func() bool {
+		for _, m := range sink.all() {
+			if over = m.GetGameOver(); over != nil {
+				return true
+			}
+		}
+		return false
+	})
+	if over.GetSurvivedMs() == 0 || over.GetSurvivedMs() > 2000 || over.GetKills() != 0 {
+		t.Fatalf("unexpected GameOver: %v", over)
+	}
+
+	// 死亡後不再收到快照。
+	n := len(sink.all())
+	time.Sleep(50 * time.Millisecond)
+	if got := len(sink.all()); got != n {
+		t.Fatalf("received %d more messages after GameOver, want 0", got-n)
+	}
+
+	// 「再來一局」：同一條連線重新 Join，得到新角色。
+	firstID := sink.all()[0].GetJoinAccepted().GetPlayerId()
+	l.Join("conn-a", sink)
+	eventually(t, "second JoinAccepted", func() bool {
+		msgs := sink.all()
+		for _, m := range msgs[n:] {
+			if a := m.GetJoinAccepted(); a != nil {
+				if a.GetPlayerId() == firstID {
+					t.Fatalf("rejoin reused player id %d", firstID)
+				}
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func TestSnapshotIncludesEnemiesAndHP(t *testing.T) {
+	cfg := LoopConfig{TickRate: 100, World: WorldConfig{
+		Width: 3000, Height: 2000, PlayerSpeed: 100, PlayerRadius: 10,
+		Combat: CombatConfig{
+			PlayerMaxHP: 100, SpawnProtection: 100, EnemyRadius: 10, MaxEnemies: 10,
+			SpawnRateBase: 50, SpawnRateMax: 50, SpawnDistance: 600,
+		},
+	}}
+	l := NewLoop(slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	go l.Run(ctx)
+	t.Cleanup(func() { cancel(); <-l.done })
+
+	sink := &fakeSink{}
+	l.Join("conn-a", sink)
+	eventually(t, "snapshot with enemies", func() bool {
+		s := sink.lastSnapshot()
+		return s != nil && len(s.GetEnemies()) > 0
+	})
+	s := sink.lastSnapshot()
+	if p := s.GetPlayers()[0]; p.GetHp() != 100 || p.GetMaxHp() != 100 {
+		t.Fatalf("player hp = %d/%d, want 100/100", p.GetHp(), p.GetMaxHp())
+	}
+	if a := sink.all()[0].GetJoinAccepted(); a.GetEnemyRadius() != 10 {
+		t.Fatalf("JoinAccepted.enemy_radius = %v, want 10", a.GetEnemyRadius())
+	}
+}

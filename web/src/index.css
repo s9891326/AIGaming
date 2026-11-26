@@ -211,3 +211,59 @@ kbd {
   border-radius: 12px;
   background: #16141f;
 }
+
+/* ---------- Game Over ---------- */
+.game-stage {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.game-stage .game-canvas {
+  margin-bottom: 0;
+}
+
+.game-over {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 12px;
+  background: rgb(12 11 18 / 80%);
+  text-align: center;
+}
+
+.game-over h2 {
+  margin: 0;
+  font-size: 2.5rem;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+
+.game-over dl {
+  margin: 0;
+}
+
+.game-over dd {
+  font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-over p {
+  margin: 0;
+  font-size: 0.85em;
+}
+
+button.primary {
+  padding: 10px 28px;
+  font-size: 1.05rem;
+  color: var(--text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.primary:hover {
+  filter: brightness(1.15);
+}

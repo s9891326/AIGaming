@@ -1,5 +1,5 @@
 import { create, toJson, type JsonValue } from '@bufbuild/protobuf'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ClientMessageSchema,
   JoinRequestSchema,
@@ -37,6 +37,11 @@ export interface GameSocketOptions {
   simulatedLagMs?: number
 }
 
+export interface GameOverInfo {
+  survivedMs: number
+  kills: number
+}
+
 export interface GameSocketState {
   status: ConnectionStatus
   /** 重連前的等待時間（毫秒），只有 status === 'closed' 且會重連時有值。 */
@@ -48,8 +53,12 @@ export interface GameSocketState {
   rtt?: number
   /** 最近 RTT_SAMPLES 次的平均往返延遲（毫秒）。 */
   rttAvg?: number
-  /** 加入遊戲後才有值；斷線時清空。 */
+  /** 加入遊戲後才有值；斷線或死亡時清空。 */
   join?: JoinInfo
+  /** 自己的角色死亡時的結果；按「再來一局」或斷線時清空。 */
+  gameOver?: GameOverInfo
+  /** 再來一局：重新送 JoinRequest，以新角色加入。 */
+  rejoin(): void
   /**
    * 客戶端遊戲狀態（預測、插值）。不放進 React state：
    * 每秒數十次的更新由 GameCanvas 在 requestAnimationFrame 裡直接讀取。
@@ -78,9 +87,12 @@ export function useGameSocket({
   const [rtt, setRtt] = useState<number>()
   const [rttAvg, setRttAvg] = useState<number>()
   const [join, setJoin] = useState<JoinInfo>()
+  const [gameOver, setGameOver] = useState<GameOverInfo>()
   const [log, setLog] = useState<MessageLogEntry[]>([])
   const samples = useRef<number[]>([])
   const nextLogId = useRef(0)
+  /** 目前連線的「送出 JoinRequest」函式，給 rejoin 使用（只在事件處理中讀取）。 */
+  const sendJoinRef = useRef<(() => void) | null>(null)
 
   // GameClient 只建立一次，跨重連保留；送出輸入的函式在連線建立時接上。
   const [game] = useState(() => new GameClient())
@@ -128,6 +140,7 @@ export function useGameSocket({
             setRtt(undefined)
             setRttAvg(undefined)
             setJoin(undefined)
+            setGameOver(undefined)
             game.reset()
             game.setRtt(undefined)
             samples.current = []
@@ -144,11 +157,7 @@ export function useGameSocket({
                 id: msg.payload.value.connectionId,
                 version: msg.payload.value.serverVersion,
               })
-              socket.send(
-                create(ClientMessageSchema, {
-                  payload: { case: 'join', value: create(JoinRequestSchema) },
-                }),
-              )
+              sendJoin()
               break
             case 'joinAccepted': {
               const v = msg.payload.value
@@ -159,11 +168,22 @@ export function useGameSocket({
                 tickRate: v.tickRate,
                 playerRadius: v.playerRadius,
                 playerSpeed: v.playerSpeed,
+                enemyRadius: v.enemyRadius,
               }
               game.onJoin(info)
               setJoin(info)
+              setGameOver(undefined)
               break
             }
+            case 'gameOver':
+              // 角色已被伺服器移除，不會再收到快照；清掉預測 / 插值狀態，等玩家按「再來一局」。
+              game.reset()
+              setJoin(undefined)
+              setGameOver({
+                survivedMs: msg.payload.value.survivedMs,
+                kills: msg.payload.value.kills,
+              })
+              break
             case 'snapshot':
               game.onSnapshot(msg.payload.value, performance.now())
               break
@@ -182,6 +202,14 @@ export function useGameSocket({
       },
       { simulatedLagMs },
     )
+    const sendJoin = () => {
+      socket.send(
+        create(ClientMessageSchema, {
+          payload: { case: 'join', value: create(JoinRequestSchema) },
+        }),
+      )
+    }
+    sendJoinRef.current = sendJoin
     const detachSender = game.attachSender((seq, x, y) => {
       socket.send(
         create(ClientMessageSchema, {
@@ -205,9 +233,12 @@ export function useGameSocket({
     return () => {
       clearInterval(ping)
       detachSender()
+      if (sendJoinRef.current === sendJoin) sendJoinRef.current = null
       socket.close()
     }
   }, [url, recordLog, simulatedLagMs, game])
+
+  const rejoin = useCallback(() => sendJoinRef.current?.(), [])
 
   return {
     status,
@@ -218,6 +249,8 @@ export function useGameSocket({
     rtt,
     rttAvg,
     join,
+    gameOver,
+    rejoin,
     game,
     log,
     clearLog: () => setLog([]),

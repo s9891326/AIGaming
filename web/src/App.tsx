@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { ConnectionCard } from './components/ConnectionCard'
 import { DebugPanel } from './components/DebugPanel'
+import { GameOverOverlay } from './components/GameOverOverlay'
 import { HealthCard } from './components/HealthCard'
 import { GameCanvas } from './game/GameCanvas'
 import { useKeyboardMove } from './game/useKeyboardMove'
@@ -24,8 +25,13 @@ function App() {
     ;(window as unknown as { __aigaming?: unknown }).__aigaming = { game }
   }, [game])
 
+  // 死亡時由 GameOverOverlay 顯示結算，canvas 不另外蓋文字。
   const overlay =
-    socket.status !== 'open' ? '與伺服器連線中…' : !socket.join ? '加入遊戲中…' : undefined
+    socket.status !== 'open'
+      ? '與伺服器連線中…'
+      : !socket.join && !socket.gameOver
+        ? '加入遊戲中…'
+        : undefined
 
   return (
     <main className="app">
@@ -42,7 +48,12 @@ function App() {
         </p>
       </header>
 
-      <GameCanvas game={game} overlay={overlay} simulatedLagMs={simulatedLagMs} />
+      <div className="game-stage">
+        <GameCanvas game={game} overlay={overlay} simulatedLagMs={simulatedLagMs} />
+        {socket.gameOver && socket.status === 'open' && (
+          <GameOverOverlay result={socket.gameOver} onRestart={socket.rejoin} />
+        )}
+      </div>
 
       <div className="grid">
         <ConnectionCard socket={socket} />

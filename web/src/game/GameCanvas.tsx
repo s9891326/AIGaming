@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { GameClient } from './GameClient'
+import type { GameClient, RenderPlayer } from './GameClient'
 import type { Vec } from './sim'
 
 interface Props {
@@ -25,6 +25,11 @@ const COLORS = {
   text: '#e8e6f0',
   muted: '#9a96ad',
   warn: '#d9a83f',
+  enemy: '#5f9e6e',
+  enemyEdge: '#3c6b48',
+  hp: '#4caf7d',
+  hpLow: '#e5534b',
+  hurt: '#ffffff',
 }
 
 /**
@@ -59,7 +64,7 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
       const r = v.join?.playerRadius ?? 16
 
       // 相機：以自己為中心；還沒有位置時看世界中央。
-      const cam: Vec = v.self ?? (world ? { x: world.w / 2, y: world.h / 2 } : { x: 0, y: 0 })
+      const cam: Vec = v.self?.pos ?? (world ? { x: world.w / 2, y: world.h / 2 } : { x: 0, y: 0 })
       const ox = Math.round(VIEW_W / 2 - cam.x)
       const oy = Math.round(VIEW_H / 2 - cam.y)
 
@@ -77,19 +82,64 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         ctx.strokeRect(-2, -2, world.w + 4, world.h + 4)
       }
 
+      // 敵人先畫，玩家疊在上面。
+      const er = v.join?.enemyRadius ?? 14
+      ctx.fillStyle = COLORS.enemy
+      ctx.strokeStyle = COLORS.enemyEdge
+      ctx.lineWidth = 2
+      for (const e of v.enemies) {
+        ctx.beginPath()
+        ctx.arc(e.pos.x, e.pos.y, er, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+      }
+
       ctx.font = '12px system-ui, sans-serif'
       ctx.textAlign = 'center'
       for (const o of v.others) {
-        drawPlayer(ctx, o.pos, r, COLORS.other, `P${o.id}`)
+        drawPlayer(ctx, o, r, COLORS.other, `P${o.id}`)
       }
       if (v.self) {
         ctx.fillStyle = COLORS.selfRing
         ctx.beginPath()
-        ctx.arc(v.self.x, v.self.y, r + 6, 0, Math.PI * 2)
+        ctx.arc(v.self.pos.x, v.self.pos.y, r + 6, 0, Math.PI * 2)
         ctx.fill()
         drawPlayer(ctx, v.self, r, COLORS.self, '你')
       }
       ctx.restore()
+
+      // 自己受傷：畫面邊緣閃紅。
+      if (v.self?.hurt) {
+        const g = ctx.createRadialGradient(
+          VIEW_W / 2,
+          VIEW_H / 2,
+          VIEW_H * 0.35,
+          VIEW_W / 2,
+          VIEW_H / 2,
+          VIEW_W * 0.6,
+        )
+        g.addColorStop(0, 'rgba(229,83,75,0)')
+        g.addColorStop(1, 'rgba(229,83,75,0.45)')
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, VIEW_W, VIEW_H)
+      }
+
+      // 自己的血條（左下，固定在畫面上）
+      if (v.self && v.self.maxHp > 0) {
+        const w = 240
+        const h = 14
+        const x = 16
+        const y = VIEW_H - 16 - h
+        const ratio = Math.max(0, v.self.hp / v.self.maxHp)
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'
+        ctx.fillRect(x - 2, y - 2, w + 4, h + 4)
+        ctx.fillStyle = ratio > 0.3 ? COLORS.hp : COLORS.hpLow
+        ctx.fillRect(x, y, w * ratio, h)
+        ctx.fillStyle = COLORS.text
+        ctx.textAlign = 'left'
+        ctx.font = '12px ui-monospace, Consolas, monospace'
+        ctx.fillText(`HP ${v.self.hp} / ${v.self.maxHp}`, x + w + 12, y + h - 2)
+      }
 
       // HUD（固定在畫面左上，不跟相機移動）
       ctx.textAlign = 'left'
@@ -99,12 +149,13 @@ export function GameCanvas({ game, overlay, simulatedLagMs }: Props) {
         [`tick ${v.tick ?? '-'}`],
         [`RTT ${v.rttMs === undefined ? '-' : `${v.rttMs.toFixed(0)} ms`}`],
         [`players ${v.others.length + (v.self ? 1 : 0)}`],
+        [`enemies ${v.enemies.length}`],
         [`pending inputs ${v.pendingInputs}`],
         [
           `correction ${v.lastCorrection.toFixed(2)}`,
           v.lastCorrection > 0.01 ? COLORS.warn : undefined,
         ],
-        [`pos ${v.self ? `${v.self.x.toFixed(0)}, ${v.self.y.toFixed(0)}` : '-'}`],
+        [`pos ${v.self ? `${v.self.pos.x.toFixed(0)}, ${v.self.pos.y.toFixed(0)}` : '-'}`],
       ]
       if (simulatedLagMs) hud.push([`simulated lag ${simulatedLagMs} ms`, COLORS.warn])
       hud.forEach(([line, color], i) => {
@@ -158,17 +209,31 @@ function drawGrid(ctx: CanvasRenderingContext2D, world: { w: number; h: number }
   ctx.stroke()
 }
 
+/** 畫一個角色：圓形、名稱、頭上的小血條；剛受傷時閃白。 */
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
-  p: Vec,
+  p: RenderPlayer,
   r: number,
   color: string,
   label: string,
 ) {
-  ctx.fillStyle = color
+  ctx.fillStyle = p.hurt ? COLORS.hurt : color
   ctx.beginPath()
-  ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
+  ctx.arc(p.pos.x, p.pos.y, r, 0, Math.PI * 2)
   ctx.fill()
+
+  if (p.maxHp > 0) {
+    const w = r * 2.4
+    const h = 4
+    const x = p.pos.x - w / 2
+    const y = p.pos.y - r - 10
+    const ratio = Math.max(0, p.hp / p.maxHp)
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'
+    ctx.fillRect(x, y, w, h)
+    ctx.fillStyle = ratio > 0.3 ? COLORS.hp : COLORS.hpLow
+    ctx.fillRect(x, y, w * ratio, h)
+  }
+
   ctx.fillStyle = COLORS.text
-  ctx.fillText(label, p.x, p.y - r - 8)
+  ctx.fillText(label, p.pos.x, p.pos.y - r - 16)
 }
