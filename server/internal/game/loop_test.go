@@ -170,7 +170,7 @@ func TestDeathSendsGameOverAndAllowsRejoin(t *testing.T) {
 		Width: 1000, Height: 600, PlayerSpeed: 100, PlayerRadius: 10,
 		Combat: CombatConfig{
 			PlayerMaxHP: 10, ContactDamage: 10, HurtInvuln: 0.5,
-			EnemySpeed: 500, EnemyRadius: 10, MaxEnemies: 10,
+			EnemySpeed: 500, EnemyRadius: 10, EnemyHP: 20, MaxEnemies: 10,
 			SpawnRateBase: 50, SpawnRateMax: 50, SpawnDistance: 50,
 		},
 	}}
@@ -223,9 +223,10 @@ func TestSnapshotIncludesEnemiesAndHP(t *testing.T) {
 	cfg := LoopConfig{TickRate: 100, World: WorldConfig{
 		Width: 3000, Height: 2000, PlayerSpeed: 100, PlayerRadius: 10,
 		Combat: CombatConfig{
-			PlayerMaxHP: 100, SpawnProtection: 100, EnemyRadius: 10, MaxEnemies: 10,
+			PlayerMaxHP: 100, SpawnProtection: 100, EnemyRadius: 10, EnemyHP: 20, MaxEnemies: 10,
 			SpawnRateBase: 50, SpawnRateMax: 50, SpawnDistance: 600,
 		},
+		Loot: DefaultLootConfig,
 	}}
 	l := NewLoop(slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -239,10 +240,48 @@ func TestSnapshotIncludesEnemiesAndHP(t *testing.T) {
 		return s != nil && len(s.GetEnemies()) > 0
 	})
 	s := sink.lastSnapshot()
-	if p := s.GetPlayers()[0]; p.GetHp() != 100 || p.GetMaxHp() != 100 {
-		t.Fatalf("player hp = %d/%d, want 100/100", p.GetHp(), p.GetMaxHp())
+	if p := s.GetPlayers()[0]; p.GetHp() != 100 || p.GetMaxHp() != 100 || p.GetLevel() != 1 || p.GetXpToNext() != 5 {
+		t.Fatalf("player = %v, want hp 100/100, level 1, xp_to_next 5", p)
+	}
+	if e := s.GetEnemies()[0]; e.GetHp() != 20 || e.GetMaxHp() != 20 {
+		t.Fatalf("enemy hp = %d/%d, want 20/20", e.GetHp(), e.GetMaxHp())
 	}
 	if a := sink.all()[0].GetJoinAccepted(); a.GetEnemyRadius() != 10 {
 		t.Fatalf("JoinAccepted.enemy_radius = %v, want 10", a.GetEnemyRadius())
+	}
+}
+
+func TestSnapshotIncludesProjectilesGemsAndKills(t *testing.T) {
+	cfg := LoopConfig{TickRate: 100, World: WorldConfig{
+		Width: 3000, Height: 2000, PlayerSpeed: 100, PlayerRadius: 10,
+		Combat: CombatConfig{
+			PlayerMaxHP: 100, SpawnProtection: 100, EnemySpeed: 0, EnemyRadius: 10, EnemyHP: 20,
+			MaxEnemies: 5, SpawnRateBase: 50, SpawnRateMax: 50, SpawnDistance: 300,
+		},
+		Loot:            LootConfig{GemValue: 1, GemRadius: 7, MagnetRadius: 0, MaxGems: 100, XPPerLevel: 5},
+		StartingWeapons: DefaultWorldConfig.StartingWeapons,
+	}}
+	l := NewLoop(slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	go l.Run(ctx)
+	t.Cleanup(func() { cancel(); <-l.done })
+
+	sink := &fakeSink{}
+	l.Join("conn-a", sink)
+
+	sawProjectile := false
+	eventually(t, "a kill with a gem on the ground", func() bool {
+		s := sink.lastSnapshot()
+		if s == nil {
+			return false
+		}
+		sawProjectile = sawProjectile || len(s.GetProjectiles()) > 0
+		return s.GetPlayers()[0].GetKills() > 0 && len(s.GetGems()) > 0
+	})
+	if !sawProjectile {
+		t.Error("never saw a projectile in snapshots")
+	}
+	if g := sink.lastSnapshot().GetGems()[0]; g.GetValue() != 1 {
+		t.Fatalf("gem value = %d, want 1", g.GetValue())
 	}
 }

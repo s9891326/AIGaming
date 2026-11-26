@@ -16,6 +16,7 @@ func combatConfig() WorldConfig {
 		ContactDamage:   10,
 		EnemySpeed:      100,
 		EnemyRadius:     10,
+		EnemyHP:         20,
 		MaxEnemies:      300,
 		SpawnRateBase:   1,
 		SpawnRateGrowth: 0.1,
@@ -34,7 +35,8 @@ func newCombatWorld(cfg WorldConfig) *World {
 
 // addEnemy 直接放一隻敵人（不經過生成），方便測試追蹤 / 碰撞。
 func (w *World) addEnemy(pos Vec2) *Enemy {
-	e := &Enemy{ID: w.nextEnemyID, Pos: pos}
+	hp := max(w.cfg.Combat.EnemyHP, 1)
+	e := &Enemy{ID: w.nextEnemyID, Pos: pos, HP: hp, MaxHP: hp}
 	w.nextEnemyID++
 	w.enemies = append(w.enemies, e)
 	return e
