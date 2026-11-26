@@ -169,7 +169,7 @@ task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
                                        ticker 20Hz ──▶ World.Step(0.05s) ──▶ 廣播 WorldSnapshot
 ```
 
-- `server/internal/game/world.go`、`combat.go`、`waves.go`、`weapons.go`、`loot.go`、`upgrades.go`：純遊戲規則（移動、輸入正規化、邊界、敵人、傷害），不碰網路、不開 goroutine，單元測試直接呼叫。
+- `server/internal/game/world.go`、`combat.go`、`waves.go`、`weapons.go`、`loot.go`、`upgrades.go`、`spatial.go`：純遊戲規則（移動、輸入正規化、邊界、敵人、傷害），不碰網路、不開 goroutine，單元測試直接呼叫。
 - `server/internal/game/loop.go`：其他 goroutine 只把「要做的事」包成閉包送進 channel，World 永遠只有一個擁有者，不需要鎖。
 - 客戶端只送「想往哪走」；位置一律由伺服器算，長度超過 1 的輸入會被正規化（斜走不會比較快）、NaN 會被丟棄。
 - **移動由輸入驅動**：一筆 `PlayerInput` = 往該方向移動一個 tick（`MoveStep`），伺服器收到就套用；`Step` 只推進 tick 並補充每人的「輸入時間預算」。每筆輸入扣 1/20 秒預算、上限 0.25 秒，所以網路抖動造成的短暫爆量能被吸收，但長期每秒最多只能移動 1 秒的量（多送輸入無法加速）。
@@ -196,6 +196,18 @@ task proto   # buf lint + format 檢查 + 產生 Go / TS 程式碼
 - 敵人不會推動玩家，所以客戶端預測不受影響（玩家位置仍只由輸入決定）。
 - 亂數來源可替換：測試用固定種子，同樣的種子 → 同樣的結果。
 - 前端：敵人與其他玩家一樣用插值；血量從快照比較前後值，下降時角色閃白、畫面邊緣閃紅（`web/src/game/health.ts`）。
+
+### 效能（#10）
+
+| 量測 | 指令 / 位置 | 300 隻 | 1000 隻 | 2000 隻 |
+|---|---|---|---|---|
+| 伺服器 tick（優化前 → 後） | `go test -bench Step -run ^$ ./internal/game/` | 0.38 → 0.18 ms | 3.9 → **0.9 ms** | 14.9 → **2.4 ms** |
+| 每位玩家的快照（優化前 → 後） | `go test -run PerfReport -v ./internal/game/` | 10.1 → 4.1 KB | 33.9 → 13.3 KB（聚集）／5.2 KB（散布） | 67.9 → 10.1 KB（散布） |
+| 前端每幀繪製 | DevTools：`(await import('/src/game/drawBench.ts')).runDrawBench({ enemies: 1000 })` | ≈ 1.2 ms | ≈ 1.7 ms | ≈ 2.6 ms |
+
+- **空間格子**（`spatial.go`）：世界切成 64 單位的格子，分離、命中、光環、旋刃、接觸傷害、找最近敵人都只看附近的格子，從 O(n²) 降到約 O(n)。`TestGridMatchesBruteForce` 確保結果與逐一比對完全相同。
+- **快照**：敵人 / 投射物 / 寶石的座標量化成整數（× 10，varint 約 2～3 bytes，float 固定 5 bytes）；敵人半徑只在加入時送一次種類表；血量只送「已損失百分比」（滿血不送）；每位玩家只收到畫面附近（再加 160 邊距）的實體（AOI）。玩家座標維持 float，預測需要精確值。
+- **前端**：量測後發現逐個畫圓本身就很快；「合併成一條大 path」與「預先畫成小圖再 drawImage」實測都更慢，所以只做了畫面外剔除與投射物光暈圖（取代 `shadowBlur`）。量測時不要每幀 `getImageData`：Chrome 會把 canvas 改成 CPU 繪製，數字會失真（`drawBench.ts` 只在最後讀回一次）。
 
 ### 平衡模擬（`cmd/sim`）
 
@@ -270,7 +282,7 @@ Gin 的請求日誌、panic recovery、`[GIN-debug]` 訊息都改走這個 logge
 - [x] 自動攻擊武器、敵人死亡、經驗寶石
 - [x] 升級系統（三選一）
 - [x] 更多武器 / 被動、敵人種類、隨時間增強的波次
-- [ ] 效能優化（空間格子、快照壓縮）
+- [x] 效能優化（空間格子、快照量化 + AOI）
 - [ ] 多人合作房間
 
 美術、英雄、技能、介面等後續規劃見 [#29](https://github.com/s9891326/AIGaming/issues/29)（#23～#28）。
