@@ -86,7 +86,7 @@ func (l *Loop) Run(ctx context.Context) {
 			cmd(l)
 		case <-ticker.C:
 			start := l.now()
-			l.world.Step(dt)
+			l.handleDeaths(l.world.Step(dt))
 			l.broadcast()
 			if took := l.now().Sub(start); took > interval/2 {
 				l.log.Warn("slow tick", "tick", l.world.Tick(), "took", took, "budget", interval)
@@ -112,6 +112,7 @@ func (l *Loop) Join(key string, sink Sink) {
 				TickRate:     uint32(l.cfg.TickRate),
 				PlayerRadius: float32(l.cfg.World.PlayerRadius),
 				PlayerSpeed:  float32(l.cfg.World.PlayerSpeed),
+				EnemyRadius:  float32(l.cfg.World.Combat.EnemyRadius),
 			},
 		}})
 		l.log.Info("player joined", "conn", key, "player", id, "players", len(l.members))
@@ -145,6 +146,26 @@ func (l *Loop) Input(key string, seq uint32, x, y float64) {
 	})
 }
 
+// handleDeaths 通知死亡的玩家並把他們移出成員：之後不再收到快照，
+// 連線保持開著，客戶端想再玩就重新送 JoinRequest（Join 會以新角色加入）。
+func (l *Loop) handleDeaths(deaths []Death) {
+	for _, d := range deaths {
+		for key, m := range l.members {
+			if m.id != d.ID {
+				continue
+			}
+			delete(l.members, key)
+			_ = m.sink.Send(&gamev1.ServerMessage{Payload: &gamev1.ServerMessage_GameOver{
+				GameOver: &gamev1.GameOver{SurvivedMs: d.SurvivedMs, Kills: d.Kills},
+			}})
+			l.log.Info("player died", "conn", key, "player", d.ID,
+				"survived", time.Duration(d.SurvivedMs)*time.Millisecond, "kills", d.Kills,
+				"players", len(l.members))
+			break
+		}
+	}
+}
+
 // enqueue 把指令送進 Loop；Loop 已停止時直接丟棄，避免呼叫端永遠卡住。
 func (l *Loop) enqueue(cmd command) {
 	select {
@@ -165,12 +186,20 @@ func (l *Loop) broadcast() {
 			X:            float32(p.Pos.X),
 			Y:            float32(p.Pos.Y),
 			LastInputSeq: p.LastInputSeq,
+			Hp:           uint32(p.HP),
+			MaxHp:        uint32(p.MaxHP),
 		}
+	}
+	enemies := l.world.Enemies()
+	enemyStates := make([]*gamev1.EnemyState, len(enemies))
+	for i, e := range enemies {
+		enemyStates[i] = &gamev1.EnemyState{Id: uint32(e.ID), X: float32(e.Pos.X), Y: float32(e.Pos.Y)}
 	}
 	msg := &gamev1.ServerMessage{Payload: &gamev1.ServerMessage_Snapshot{Snapshot: &gamev1.WorldSnapshot{
 		Tick:         l.world.Tick(),
 		ServerTimeMs: float64(l.now().UnixMilli()),
 		Players:      states,
+		Enemies:      enemyStates,
 	}}}
 	for _, m := range l.members {
 		// Send 不會阻塞；失敗代表連線正在關閉，稍後會收到 Leave。

@@ -6,6 +6,7 @@ package game
 
 import (
 	"math"
+	"math/rand/v2"
 	"sort"
 )
 
@@ -35,6 +36,8 @@ type WorldConfig struct {
 	// 每個 tick 預算增加 dt，每套用一筆輸入扣 InputDt；網路抖動時短暫爆量的輸入可以被吸收，
 	// 但長期而言每秒最多只能移動 1 秒的量（客戶端無法靠多送輸入加速）。
 	MaxInputBudget float64
+
+	Combat CombatConfig
 }
 
 // DefaultWorldConfig 是預設的世界參數：世界比畫面（960×640）大，相機跟隨玩家。
@@ -45,6 +48,7 @@ var DefaultWorldConfig = WorldConfig{
 	PlayerRadius:   16,
 	InputDt:        1.0 / 20,
 	MaxInputBudget: 0.25,
+	Combat:         DefaultCombatConfig,
 }
 
 // Player 是一個角色。
@@ -53,6 +57,12 @@ type Player struct {
 	Pos          Vec2
 	LastInputSeq uint32  // 最後套用的輸入序號
 	InputBudget  float64 // 還能套用多少秒的輸入
+
+	HP, MaxHP  int
+	Age        float64 // 存活秒數
+	Invuln     float64 // 剩餘無敵秒數（加入保護、受傷後無敵）
+	Kills      uint32
+	spawnAccum float64 // 累積的生成量，滿 1 就在這位玩家附近生成一隻敵人
 }
 
 // World 是整個遊戲世界的狀態。不是並行安全的：只能由一個 goroutine（Loop）存取。
@@ -61,11 +71,21 @@ type World struct {
 	tick    uint32
 	nextID  PlayerID
 	players map[PlayerID]*Player
+
+	enemies     []*Enemy
+	nextEnemyID EnemyID
+	rng         *rand.Rand // 生成位置等隨機性；測試可換成固定種子
 }
 
 // NewWorld 建立空的世界。
 func NewWorld(cfg WorldConfig) *World {
-	return &World{cfg: cfg, nextID: 1, players: make(map[PlayerID]*Player)}
+	return &World{
+		cfg:         cfg,
+		nextID:      1,
+		players:     make(map[PlayerID]*Player),
+		nextEnemyID: 1,
+		rng:         rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+	}
 }
 
 // Config 回傳世界參數。
@@ -82,6 +102,9 @@ func (w *World) AddPlayer() PlayerID {
 		ID:          id,
 		Pos:         Vec2{w.cfg.Width / 2, w.cfg.Height / 2},
 		InputBudget: w.cfg.MaxInputBudget,
+		HP:          w.cfg.Combat.PlayerMaxHP,
+		MaxHP:       w.cfg.Combat.PlayerMaxHP,
+		Invuln:      w.cfg.Combat.SpawnProtection,
 	}
 	return id
 }
@@ -120,13 +143,37 @@ func (w *World) ApplyInput(id PlayerID, seq uint32, x, y float64) InputResult {
 	return InputApplied
 }
 
-// Step 推進模擬 dt 秒：tick 加一，並補充每個角色的輸入預算。
-// 移動完全由 ApplyInput 驅動，所以客戶端可以用同樣的算法預測自己的位置。
-func (w *World) Step(dt float64) {
+// Step 推進模擬 dt 秒，回傳這個 tick 死亡的玩家（已從世界移除）。
+//
+// 玩家的移動完全由 ApplyInput 驅動（客戶端可以用同樣的算法預測自己的位置）；
+// Step 負責時間相關的事：輸入預算、無敵時間、敵人生成 / 移動 / 分離、接觸傷害。
+func (w *World) Step(dt float64) []Death {
 	w.tick++
 	for _, p := range w.players {
 		p.InputBudget = math.Min(p.InputBudget+dt, w.cfg.MaxInputBudget)
+		p.Age += dt
+		p.Invuln = math.Max(0, p.Invuln-dt)
 	}
+	if len(w.players) == 0 {
+		// 沒有人在玩：清空敵人，下一位加入的玩家從乾淨的世界開始。
+		w.enemies = w.enemies[:0]
+		return nil
+	}
+	players := w.sortedPlayers()
+	w.spawnEnemies(players, dt)
+	w.moveEnemies(players, dt)
+	w.separateEnemies()
+	return w.applyContactDamage(players)
+}
+
+// sortedPlayers 依 ID 排序，讓亂數的使用順序固定（同樣的種子 → 同樣的結果，測試才穩定）。
+func (w *World) sortedPlayers() []*Player {
+	out := make([]*Player, 0, len(w.players))
+	for _, p := range w.players {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // Players 回傳所有角色的副本，依 ID 排序（快照內容穩定，方便比對與測試）。
